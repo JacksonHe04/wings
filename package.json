@@ -1,0 +1,12 @@
+{
+  "name": "wings-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --filter @wings/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "deploy": "firebase deploy"
+  },
+  "packageManager": "pnpm@12.6.0"
+}
