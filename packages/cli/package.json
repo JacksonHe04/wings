@@ -1,0 +1,21 @@
+{
+  "name": "@wings-dev/cli",
+  "version": "0.1.0",
+  "description": "wings CLI — cross-user, cross-machine agent coordination for AI coding agents",
+  "bin": {
+    "wings": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}
