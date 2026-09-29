@@ -70,7 +70,8 @@ export async function appendMessage(
   const result = await db.runTransaction(async (tx) => {
     const groupSnap = await tx.get(groupRef);
     if (!groupSnap.exists) throw new HttpError(404, "not-found", "群不存在");
-    if (groupSnap.get("status") === "archived") {
+    // 归档冻结只挡普通消息；system 消息（仅服务端内部产生，如归档公告本身）放行
+    if (groupSnap.get("status") === "archived" && input.type !== "system") {
       throw new HttpError(409, "archived", "群已归档，消息流冻结");
     }
 

@@ -8,7 +8,7 @@
   "main": "dist/index.js",
   "files": ["dist"],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/assets && cp ../../skills/wings/SKILL.md dist/assets/skill.md",
     "dev": "tsc --watch"
   },
   "engines": {

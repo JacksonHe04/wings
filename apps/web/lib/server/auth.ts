@@ -30,6 +30,7 @@ export async function requireUser(req: NextRequest): Promise<{ uid: string; emai
     return { uid, email: decoded.email };
   } catch (err) {
     if (err instanceof HttpError) throw err;
+    console.error("[wings-api] verifyIdToken/ensureUser 失败:", err);
     throw new HttpError(401, "invalid-token", "ID token 无效或已过期");
   }
 }

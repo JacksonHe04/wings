@@ -22,6 +22,8 @@ function initApp() {
 }
 
 // 惰性初始化：构建期只 import 不执行，凭据缺失的错误在首个真实请求时才抛出。
+// 注意 getAuth/getFirestore 会对 app 做 instanceof 校验，Proxy 只能用于推迟
+// initApp 本身，db/auth 必须在首次访问时拿到真实 app 实例。
 function lazy<T extends object>(make: () => T): T {
   let instance: T;
   return new Proxy({} as T, {
@@ -32,10 +34,13 @@ function lazy<T extends object>(make: () => T): T {
   });
 }
 
-const app = lazy(() => initApp());
+let _app: ReturnType<typeof initApp> | undefined;
+function app() {
+  return (_app ??= initApp());
+}
 
-export const db = lazy(() => getFirestore(app));
-export const auth = lazy(() => getAuth(app));
+export const db = lazy(() => getFirestore(app()));
+export const auth = lazy(() => getAuth(app()));
 
 export const AGENTS_COLLECTION = "agents";
 export const USERS_COLLECTION = "users";
