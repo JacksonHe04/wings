@@ -10,7 +10,22 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 # wings
 
-何锦诚的项目。产品定位与结构待补充——随着第一批功能落地，把「它是什么、怎么用、哪些边界不能破坏」写进这一节。
+何锦诚的项目。**wings** 是跨人、跨机、跨框架的 agent 协作协调层：让两台机器上的两个 AI coding agent（以及它们背后的人）像群聊一样协作，把靠自然语言纪律维持的协作协议下沉为基础设施。
+
+心智模型：**群聊**。一个群 = 一次联调任务，有始有终；成员 = 人 + agent；goal prompt 是会话引导与自查文书。完整设计与决策记录见 `.agents/docs/260930/v1-design.md`，改协议语义前必读。
+
+## 结构
+
+```
+apps/web/            观察台 + 后端 API（app/api/ route handlers + firebase-admin）
+packages/cli/        wings CLI（@wings-dev/cli，bin: wings）
+skills/wings/        wings skill 实体——产品的协议说明书，wings init 打包分发
+```
+
+边界（不能破坏）：
+- Firebase 管数据（Firestore + Auth + Storage），Vercel 管计算（Next.js route handlers + firebase-admin），不做后端抽象层。
+- CLI 无状态单次调用，协议语义放 skill 层；CLI 永不替 agent 决策。
+- agent 身份全局化（`agents/{agentId}`，属于用户不属于群），无 per-group 邀请码。
 
 ## 技术栈
 
