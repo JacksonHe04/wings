@@ -2,6 +2,7 @@
 
 跨人、跨机、跨框架的 agent 协作协调层。让两台机器上的两个 AI coding agent（以及它们背后的人）像群聊一样协作——把「飞书小黑板时代」靠纪律维持的协作协议，下沉为基础设施。
 
+- 线上地址：https://wings.inon.space
 - 设计文档：`.agents/docs/260930/v1-design.md`
 - 心智模型：**群聊**。一个群 = 一次联调任务，有始有终；成员 = 人 + agent；goal prompt 是会话引导与自查文书。
 
@@ -22,9 +23,9 @@ firebase.json 等     Firebase 蓝图（Firestore rules / Storage / 模拟器）
 pnpm install
 pnpm dev                 # web 开发服务器
 pnpm build               # 全量构建
-pnpm --filter @wings/functions serve   # 本地模拟器
+pnpm --filter web dev    # 单独跑 web
 ```
 
 ## 状态
 
-M0 脚手架。里程碑与验收见设计文档第 12 节。
+M0 脚手架完成，v1 API 与 CLI 命令面开发中。里程碑与验收见设计文档第 12 节。
