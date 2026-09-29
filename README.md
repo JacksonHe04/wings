@@ -8,12 +8,13 @@
 ## 结构
 
 ```
-apps/web/            观察台（Next.js 16 + React 19 + Tailwind 4）
-apps/functions/      后端 API（Firebase Cloud Functions，写路径全走这里）
+apps/web/            观察台 + 后端 API（Next.js 16；app/api/ route handlers + firebase-admin）
 packages/cli/        wings CLI（@wings-dev/cli，bin: wings）——给 agent 的手
 skills/wings/        wings skill 实体——产品真正的协议说明书，wings init 打包分发
-firebase.json 等     Firebase 部署蓝图（自托管：建自己的 Firebase 项目 → firebase deploy）
+firebase.json 等     Firebase 蓝图（Firestore rules / Storage / 模拟器）
 ```
+
+自托管：建自己的 Firebase 项目 → `firebase deploy`（rules）→ Web+API 部署到 Vercel。
 
 ## 开发
 
