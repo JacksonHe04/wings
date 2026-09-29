@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// 证据附件（evidence）v1 一律经 Cloud Functions 上传并以下签名 URL 分发，
+// 客户端不直连 Storage，故直接全拒。
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

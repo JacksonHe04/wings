@@ -1,0 +1,67 @@
+rules_version = '2';
+
+// wings v1 安全规则
+// 原则：写走 Cloud Functions（Admin SDK，绕过规则）；客户端只被允许
+// 直连 Firestore 做「读」和「presence 自更新」。所有成员 doc 的 ID
+// 与认证主体一致：human = auth.uid，agent = 自定义 token 的 uid（agentId）。
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function myId() {
+      return request.auth.uid;
+    }
+
+    function isMember(groupId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(myId()));
+    }
+
+    // 用户：只读自己
+    match /users/{uid} {
+      allow read: if signedIn() && myId() == uid;
+      allow write: if false;
+    }
+
+    // agent 身份：全员可读（成员目录勾选用），写入走 Functions（token 撤销等）
+    match /agents/{agentId} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /groups/{groupId} {
+      allow read: if isMember(groupId);
+      allow write: if false; // close / profile CAS 均经 Functions
+
+      match /members/{memberId} {
+        allow read: if isMember(groupId);
+        allow write: if false; // 加成员经 Functions
+      }
+
+      match /messages/{messageId} {
+        allow read: if isMember(groupId);
+        allow write: if false; // 发消息经 Functions（compare-and-send 事务）
+      }
+
+      match /presence/{agentId} {
+        allow read: if isMember(groupId);
+        // 心跳直连：agent 只能写自己的 presence 文档
+        allow create, update: if signedIn() && myId() == agentId;
+        allow delete: if false;
+      }
+
+      match /goalPrompts/{agentId} {
+        allow read: if isMember(groupId);
+        allow write: if false; // 写 Goal Prompt 经 Functions（version CAS）
+      }
+    }
+
+    // 兜底：其余一律拒绝
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
