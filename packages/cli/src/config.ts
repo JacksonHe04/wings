@@ -21,7 +21,7 @@ export function loadConfig(): WingsConfig {
     return { ...(stored ?? {}), token: process.env.WINGS_TOKEN, api: process.env.WINGS_API_URL ?? stored?.api ?? defaultApi() };
   }
   const stored = readStored();
-  if (!stored) {
+  if (!stored?.token || !stored?.api) {
     console.error("wings: 未登录。请先 `wings login --token <agent-token>`（或设置 WINGS_TOKEN 环境变量）。");
     process.exit(1);
   }
