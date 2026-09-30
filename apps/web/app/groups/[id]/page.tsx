@@ -14,6 +14,7 @@ interface Detail {
     name: string;
     status: string;
     seq: number;
+    createdAt: number;
     profile: {
       description: string;
       announcement: string;
@@ -24,6 +25,18 @@ interface Detail {
   members: Array<{ id: string; kind: string; name: string; role: string }>;
   presence: Array<Presence>;
   goalPrompts: Array<{ agentId: string; content: string; version: number; updatedBy: string }>;
+}
+
+function timeStr(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
+}
+
+function nameOf(from: Message["from"], members: Detail["members"]): string {
+  if (from.kind === "system") return "系统";
+  const m = members.find((x) => x.id === from.id);
+  const short = from.id.slice(0, 8);
+  return m ? m.name : `${from.kind}:${short}`;
 }
 
 export default function GroupPage() {
@@ -59,10 +72,7 @@ export default function GroupPage() {
   // 消息流实时订阅（直连 Firestore；rules 限定成员可读）
   useEffect(() => {
     if (!user || !id) return;
-    const q = query(
-      collection(clientDb, "groups", id, "messages"),
-      orderBy("seq"),
-    );
+    const q = query(collection(clientDb, "groups", id, "messages"), orderBy("seq"));
     return onSnapshot(
       q,
       (snap) => setMessages(snap.docs.map((d) => d.data() as Message)),
@@ -85,140 +95,170 @@ export default function GroupPage() {
   }
 
   if (loading || !user) {
-    return <main className="flex min-h-dvh items-center justify-center bg-zinc-50 dark:bg-zinc-950">…</main>;
+    return <main className="flex min-h-dvh items-center justify-center" />;
   }
 
   if (error) {
     return (
-      <main className="mx-auto max-w-3xl bg-zinc-50 px-6 py-10 dark:bg-zinc-950">
-        <p className="text-sm text-red-600">{error}</p>
-        <Link href="/" className="mt-4 inline-block text-sm text-zinc-500 hover:underline">← 返回</Link>
+      <main className="mx-auto max-w-2xl px-6 py-16">
+        <p className="text-sm text-danger">{error}</p>
+        <Link href="/" className="btn-ghost mt-6 inline-block">← 返回</Link>
       </main>
     );
   }
 
   if (!detail) {
-    return <main className="flex min-h-dvh items-center justify-center bg-zinc-50 dark:bg-zinc-950">…</main>;
+    return <main className="flex min-h-dvh items-center justify-center" />;
   }
 
   const { group, members, presence, goalPrompts } = detail;
   const doneGoals = group.profile.goals.filter((g) => g.status === "done").length;
+  const archived = group.status === "archived";
 
   return (
-    <main className="mx-auto min-h-dvh max-w-3xl bg-zinc-50 px-6 py-10 dark:bg-zinc-950">
-      <div className="mb-1 text-sm text-zinc-400">
-        <Link href="/" className="hover:underline">wings</Link> / 群
-      </div>
-      <header className="mb-6 flex items-start justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
+    <main className="mx-auto min-h-dvh max-w-5xl px-6 pb-24 pt-8">
+      <Link href="/" className="plate transition-colors hover:text-paper">← wings</Link>
+
+      {/* 任务简报条 */}
+      <header className="mb-8 mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-line pb-4">
+        <span
+          className={`h-1.5 w-1.5 shrink-0 self-center rounded-full ${archived ? "bg-line" : "bg-signal live-dot"}`}
+        />
+        <h1 className={`text-xl font-semibold tracking-tight ${archived ? "text-dim" : "text-paper"}`}>
           {group.name}
-          <span className={`ml-3 align-middle text-xs font-normal ${group.status === "archived" ? "text-zinc-400" : "text-emerald-600"}`}>
-            {group.status === "archived" ? "已归档" : "进行中"}
-          </span>
         </h1>
-        <button onClick={downloadExport} className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs dark:border-zinc-700">
-          导出 Markdown
-        </button>
+        <span className="plate">
+          {archived ? "已归档" : "进行中"} · SEQ {String(group.seq).padStart(3, "0")} · V{group.profile.announcementVersion}
+        </span>
       </header>
 
-      {/* 群状态层 */}
-      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        {group.profile.description && (
-          <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">{group.profile.description}</p>
-        )}
-        {group.profile.announcement && (
-          <p className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-            📢 {group.profile.announcement}
-          </p>
-        )}
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">
-          目标（{doneGoals}/{group.profile.goals.length}）· profile v{group.profile.announcementVersion}
-        </h3>
-        <ul className="space-y-1">
-          {group.profile.goals.map((g) => (
-            <li key={g.id} className="flex items-center gap-2 text-sm">
-              <span className={g.status === "done" ? "text-emerald-600" : g.status === "dropped" ? "text-zinc-300" : "text-zinc-400"}>
-                {g.status === "done" ? "☑" : g.status === "dropped" ? "☒" : "☐"}
-              </span>
-              <span className={g.status === "done" ? "text-zinc-400 line-through" : "text-zinc-800 dark:text-zinc-200"}>
-                <span className="mr-1 font-mono text-xs text-zinc-400">{g.id}</span>
-                {g.text}
-              </span>
-            </li>
-          ))}
-          {group.profile.goals.length === 0 && <li className="text-sm text-zinc-400">（无）</li>}
-        </ul>
-      </section>
-
-      {/* 成员与在场 */}
-      <section className="mb-6 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">成员</h3>
-        <ul className="space-y-1 text-sm">
-          {members.map((m) => {
-            const p = presence.find((x) => x.agentId === m.id);
-            return (
-              <li key={m.id} className="flex items-center justify-between">
-                <span className="text-zinc-800 dark:text-zinc-200">
-                  {m.kind === "agent" ? "🤖" : "👤"} {m.name}
-                  <span className="ml-2 text-xs text-zinc-400">{m.kind}:{m.id.slice(0, 8)}</span>
-                  {m.role === "owner" && <span className="ml-1 text-xs text-zinc-400">owner</span>}
-                </span>
-                {p && (
-                  <span className="text-xs text-zinc-500">
-                    <span className={
-                      p.state === "online" ? "text-emerald-600" : p.state === "sleeping" ? "text-amber-600" : "text-zinc-400"
-                    }>●</span>{" "}
-                    {p.state} {p.activity && `· ${p.activity}`}
+      <div className="grid gap-10 lg:grid-cols-[1fr_280px]">
+        {/* 消息流 */}
+        <section className="order-2 lg:order-1">
+          <ul className="space-y-1">
+            {messages.map((m) =>
+              m.type === "system" ? (
+                <li key={m.id} className="flex items-baseline gap-3 py-2 text-[13px] text-dim">
+                  <span className="coord w-12 shrink-0 text-right text-[11px] text-dim/60">#{String(m.seq).padStart(3, "0")}</span>
+                  <span className="border-l border-dashed border-line pl-3">{m.body}</span>
+                </li>
+              ) : (
+                <li key={m.id} className="group flex gap-3 rounded-md py-2.5 transition-colors hover:bg-panel-2/60">
+                  <span className="coord w-12 shrink-0 pt-0.5 text-right text-[11px] text-dim">
+                    #{String(m.seq).padStart(3, "0")}
                   </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      {/* Goal Prompts */}
-      {goalPrompts.length > 0 && (
-        <section className="mb-6 space-y-2">
-          {goalPrompts.map((gp) => (
-            <details key={gp.agentId} className="rounded-2xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-              <summary className="cursor-pointer text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Goal Prompt · {gp.agentId.slice(0, 10)}…（v{gp.version}，by {gp.updatedBy}）
-              </summary>
-              <pre className="mt-3 whitespace-pre-wrap text-xs text-zinc-600 dark:text-zinc-400">{gp.content}</pre>
-            </details>
-          ))}
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-[13px] font-medium text-paper">{nameOf(m.from, members)}</span>
+                      {m.to !== "all" && (
+                        <span className="coord text-[11px] text-dim">→ {m.to.slice(0, 8)}</span>
+                      )}
+                      {m.refs.length > 0 && (
+                        <span className="coord text-[11px] text-amber/80">↩#{m.refs.join(" #")}</span>
+                      )}
+                      <span className="coord ml-auto text-[11px] text-dim/60">{timeStr(m.createdAt)}</span>
+                    </div>
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-paper/90">{m.body}</p>
+                    {m.evidence.length > 0 && <EvidenceList evidence={m.evidence} />}
+                  </div>
+                </li>
+              ),
+            )}
+          </ul>
+          {messages.length === 0 && (
+            <p className="py-10 text-center text-sm text-dim">
+              还没有消息。让 agent 说第一句：<code className="coord text-xs">wings send "…"</code>
+            </p>
+          )}
         </section>
-      )}
 
-      {/* 消息流 */}
-      <section>
-        <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-400">消息流（seq {group.seq}）</h3>
-        <ul className="space-y-3">
-          {messages.map((m) => (
-            <li
-              key={m.id}
-              className={`rounded-2xl border p-4 ${
-                m.type === "system"
-                  ? "border-dashed border-zinc-300 bg-transparent dark:border-zinc-700"
-                  : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
-              }`}
-            >
-              <div className="mb-1 flex items-center gap-2 text-xs text-zinc-400">
-                <span className="font-mono">#{m.seq}</span>
-                <span>{m.from.kind === "system" ? "⚙️ 系统" : `${m.from.kind}:${m.from.id.slice(0, 10)}`}</span>
-                {m.to !== "all" && <span>→ {m.to.slice(0, 10)}…</span>}
-                {m.refs.length > 0 && <span>↩ #{m.refs.join(",#")}</span>}
-                <span>{new Date(m.createdAt).toLocaleString()}</span>
-              </div>
-              <p className={`whitespace-pre-wrap text-sm ${m.type === "system" ? "text-zinc-500" : "text-zinc-800 dark:text-zinc-200"}`}>
-                {m.body}
+        {/* 侧栏：控制面板 */}
+        <aside className="order-1 space-y-8 lg:order-2 lg:sticky lg:top-8 lg:self-start">
+          <section>
+            <h3 className="plate mb-2 border-b border-line pb-1.5">目标 · {doneGoals}/{group.profile.goals.length}</h3>
+            <ul className="space-y-1.5">
+              {group.profile.goals.map((g) => (
+                <li key={g.id} className="flex items-start gap-2 text-sm">
+                  <span className={g.status === "done" ? "text-signal" : g.status === "dropped" ? "text-line" : "text-dim"}>
+                    {g.status === "done" ? "☑" : g.status === "dropped" ? "☒" : "☐"}
+                  </span>
+                  <span className={g.status === "done" ? "text-dim line-through" : "text-paper/90"}>
+                    <span className="coord mr-1 text-[11px] text-dim">{g.id}</span>
+                    {g.text}
+                  </span>
+                </li>
+              ))}
+              {group.profile.goals.length === 0 && <li className="text-sm text-dim">（立项时未填目标）</li>}
+            </ul>
+          </section>
+
+          {group.profile.announcement && (
+            <section>
+              <h3 className="plate mb-2 border-b border-line pb-1.5">公告</h3>
+              <p className="rounded-md border-l-2 border-amber bg-panel px-3 py-2 text-sm text-paper/90">
+                {group.profile.announcement}
               </p>
-              {m.evidence.length > 0 && <EvidenceList evidence={m.evidence} />}
-            </li>
-          ))}
-        </ul>
-      </section>
+            </section>
+          )}
+
+          {group.profile.description && (
+            <section>
+              <h3 className="plate mb-2 border-b border-line pb-1.5">背景</h3>
+              <p className="text-sm leading-relaxed text-paper/70">{group.profile.description}</p>
+            </section>
+          )}
+
+          <section>
+            <h3 className="plate mb-2 border-b border-line pb-1.5">成员 · 在场</h3>
+            <ul className="space-y-1.5">
+              {members.map((m) => {
+                const p = presence.find((x) => x.agentId === m.id);
+                return (
+                  <li key={m.id} className="flex items-center justify-between text-sm">
+                    <span className="text-paper/90">
+                      <span className="mr-1.5 text-dim">{m.kind === "agent" ? "◆" : "○"}</span>
+                      {m.name}
+                    </span>
+                    {p ? (
+                      <span className="flex items-center gap-1.5 text-xs text-dim">
+                        <span
+                          className={`h-1.5 w-1.5 rounded-full ${
+                            p.state === "online" ? "bg-signal live-dot" : p.state === "sleeping" ? "bg-amber" : "bg-line"
+                          }`}
+                        />
+                        {p.activity || p.state}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-dim/50">{m.role === "owner" ? "owner" : ""}</span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          {goalPrompts.length > 0 && (
+            <section>
+              <h3 className="plate mb-2 border-b border-line pb-1.5">Goal Prompts</h3>
+              <div className="space-y-1.5">
+                {goalPrompts.map((gp) => (
+                  <details key={gp.agentId} className="rounded-md border border-line bg-panel">
+                    <summary className="cursor-pointer px-3 py-2 text-[13px] text-paper/80">
+                      {members.find((m) => m.id === gp.agentId)?.name ?? gp.agentId.slice(0, 8)}
+                      <span className="coord ml-2 text-[11px] text-dim">v{gp.version}</span>
+                    </summary>
+                    <pre className="whitespace-pre-wrap px-3 pb-3 text-xs leading-relaxed text-dim">{gp.content}</pre>
+                  </details>
+                ))}
+              </div>
+            </section>
+          )}
+
+          <button onClick={downloadExport} className="btn-ghost w-full">
+            导出 Markdown
+          </button>
+        </aside>
+      </div>
     </main>
   );
 }
@@ -226,14 +266,19 @@ export default function GroupPage() {
 function EvidenceList({ evidence }: { evidence: Evidence[] }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <div className="mt-2">
+    <div className="mt-1.5">
       {evidence.map((e) => (
         <div key={e.name} className="text-xs">
-          <button onClick={() => setOpen(open === e.name ? null : e.name)} className="text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300">
-            📎 {e.name}{e.content ? "（点击查看）" : ""}
+          <button
+            onClick={() => setOpen(open === e.name ? null : e.name)}
+            className="coord text-dim transition-colors hover:text-amber"
+          >
+            📎 {e.name}{e.content ? "" : ""}
           </button>
           {open === e.name && e.content && (
-            <pre className="mt-1 max-h-60 overflow-auto rounded-lg bg-zinc-100 p-2 text-xs dark:bg-zinc-800">{e.content}</pre>
+            <pre className="mt-1 max-h-60 overflow-auto rounded-md border border-line bg-panel p-2 text-xs text-paper/80">
+              {e.content}
+            </pre>
           )}
         </div>
       ))}

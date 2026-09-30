@@ -1,26 +1,113 @@
 @import "tailwindcss";
 
+/*
+ * wings 观察台 — 夜班控制室
+ * 墨蓝夜色底，塔台琥珀只给交互与注意，信号绿只给在线。
+ * 签名：贯穿全站的等宽字坐标系统（seq / ID / 时间戳 / 铭牌按钮）。
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --ink: #0b1015;
+  --panel: #111820;
+  --panel-2: #17202b;
+  --line: #232e3b;
+  --paper: #e7edf3;
+  --dim: #7e8b99;
+  --amber: #f0b341;
+  --signal: #5ec269;
+  --danger: #e0655c;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-ink: var(--ink);
+  --color-panel: var(--panel);
+  --color-panel-2: var(--panel-2);
+  --color-line: var(--line);
+  --color-paper: var(--paper);
+  --color-dim: var(--dim);
+  --color-amber: var(--amber);
+  --color-signal: var(--signal);
+  --color-danger: var(--danger);
+  --font-sans: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 控制台铭牌：等宽小字大写宽距 */
+.plate {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+/* 等宽数字坐标 */
+.coord {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+.live-dot {
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+}
+
+/* 输入控件统一语气 */
+.field {
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--paper);
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.field::placeholder { color: var(--dim); opacity: 0.7; }
+.field:focus { border-color: var(--amber); }
+
+.btn-primary {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  background: var(--amber);
+  color: var(--ink);
+  padding: 8px 16px;
+  font-weight: 600;
+  transition: filter 120ms ease;
+}
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-primary:disabled { opacity: 0.5; }
+
+.btn-ghost {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  padding: 6px 12px;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.btn-ghost:hover { color: var(--paper); border-color: var(--dim); }
+
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 2px;
 }

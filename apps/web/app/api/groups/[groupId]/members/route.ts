@@ -52,7 +52,27 @@ export async function POST(
       throw new HttpError(409, "already-member", "该成员已在群里");
     }
     await memberRef.set({ kind: body.kind, role: "member", name: memberName, joinedAt: Date.now() });
-    await groupRef.update({ memberIds: FieldValue.arrayUnion(memberId) });
+
+    // 观察台可见性：agent 入群时把主人（human uid）也写进 memberIds 与成员表，
+    // 否则主人既查不到这个群，onSnapshot 也会被 rules 拒绝。
+    const updateIds = [memberId];
+    if (body.kind === "agent") {
+      const agentDoc = await db.collection("agents").doc(memberId).get();
+      const ownerId = agentDoc.get("ownerId");
+      if (ownerId && ownerId !== memberId) {
+        updateIds.push(ownerId);
+        const ownerRef = membersCol(groupId).doc(ownerId);
+        if (!(await ownerRef.get()).exists) {
+          let ownerName = "human";
+          try {
+            const u = await auth.getUser(ownerId);
+            ownerName = u.displayName ?? u.email ?? "human";
+          } catch { /* 用户已删除时兜底 */ }
+          await ownerRef.set({ kind: "human", role: "member", name: ownerName, joinedAt: Date.now() });
+        }
+      }
+    }
+    await groupRef.update({ memberIds: FieldValue.arrayUnion(...updateIds) });
     await appendSystemMessage(groupId, `${body.kind}:${memberId}（${memberName}）加入群聊`);
 
     return Response.json({ ok: true, memberId });

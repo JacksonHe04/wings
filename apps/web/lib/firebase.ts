@@ -1,7 +1,7 @@
 "use client";
 
 import { getApp, getApps, initializeApp } from "firebase/app";
-import { connectAuthEmulator, getAuth } from "firebase/auth";
+import { browserLocalPersistence, connectAuthEmulator, getAuth, setPersistence } from "firebase/auth";
 import { connectFirestoreEmulator, getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -16,6 +16,10 @@ const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
 export const clientAuth = getAuth(app);
 export const clientDb = getFirestore(app);
+
+// 显式声明本地持久化：个别环境（如自动化浏览器）下 SDK 会静默退回内存持久化，
+// 表现为刷新即掉登录。
+void setPersistence(clientAuth, browserLocalPersistence).catch(() => undefined);
 
 // 本地开发/e2e：连接 Firebase 模拟器（无需真实项目凭据）
 if (

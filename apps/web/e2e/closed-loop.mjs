@@ -117,6 +117,8 @@ wings(tokenA, ["group", "create",
 const groupsA = await api("/api/groups", { token: tokenA });
 const groupId = groupsA.data.groups[0].id;
 check("建群 + 立项（g1-g3）", groupsA.ok && groupsA.data.groups[0].profile.goals.length === 3);
+const groupsOwner = await api("/api/groups", { token: user1 });
+check("主人（human）能看到自己 agent 建的群", groupsOwner.ok && groupsOwner.data.groups.some((g) => g.id === groupId));
 
 // 2.5 先拉 B 进群（成员才能读写 Goal Prompt）
 wings(tokenA, ["group", "member", "add", "--group", groupId, "--agent", agentB.data.agentId]);

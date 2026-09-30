@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { db, GROUPS_COLLECTION, membersCol } from "@/lib/server/admin";
+import { db, auth, GROUPS_COLLECTION, membersCol } from "@/lib/server/admin";
 import { requirePrincipal, ensureUserDoc, HttpError } from "@/lib/server/auth";
 import { fail, readJson } from "@/lib/server/http";
 import { appendSystemMessage } from "@/lib/server/groups";
@@ -33,6 +33,12 @@ export async function POST(req: NextRequest) {
       announcementVersion: 1,
       goals,
     };
+    // 冗余成员数组：Firestore 无法跨子集合查询，列表页靠它反查「我在的群」。
+    // agent 建群时把其主人（human uid）一并计入，否则主人在观察台看不到自己的群。
+    const memberIds = [principal.id];
+    if (principal.kind === "agent" && principal.ownerId !== principal.id) {
+      memberIds.push(principal.ownerId);
+    }
     await ref.set({
       name: body.name.trim(),
       createdBy: principal.id,
@@ -40,8 +46,7 @@ export async function POST(req: NextRequest) {
       status: "active",
       seq: 0,
       profile,
-      // 冗余成员数组：Firestore 无法跨子集合查询，列表页靠它反查「我在的群」
-      memberIds: [principal.id],
+      memberIds,
     });
 
     const member: Member = {
@@ -55,6 +60,25 @@ export async function POST(req: NextRequest) {
       joinedAt: now,
     };
     await membersCol(ref.id).doc(principal.id).set(member);
+
+    // 主人（human uid）也要有 member 文档：观察台 onSnapshot 的 rules 依赖它
+    if (principal.kind === "agent") {
+      const ownerDoc = await membersCol(ref.id).doc(principal.ownerId).get();
+      if (!ownerDoc.exists) {
+        let ownerName = "human";
+        try {
+          const u = await auth.getUser(principal.ownerId);
+          ownerName = u.displayName ?? u.email ?? "human";
+        } catch { /* 用户已删除时兜底 */ }
+        await membersCol(ref.id).doc(principal.ownerId).set({
+          kind: "human",
+          role: "owner",
+          name: ownerName,
+          joinedAt: now,
+        });
+      }
+      await ensureUserDoc(principal.ownerId);
+    }
     await appendSystemMessage(
       ref.id,
       `群由 ${principal.kind}:${principal.id} 创建。目标：${goals.map((g) => `${g.id} ${g.text}`).join("；") || "（立项时未填）"}`,
