@@ -1,30 +1,35 @@
 @import "tailwindcss";
 
 /*
- * wings 观察台 — 白昼控制台
- * 冷调纸白底，塔台琥珀只给注意与高亮，信号绿只给在线。
- * 签名：贯穿全站的等宽字坐标系统（seq / ID / 时间戳 / 铭牌按钮）。
+ * wings 观察台 — 对齐 fde-anything Studio 的桌面应用骨架：
+ * 白侧栏 + 画布 + 卡片浮层，外壳不滚动、页面自管滚动区。
+ * 语义色：塔台琥珀只给公告/引用/焦点，信号绿只给在线。
  */
 :root {
-  --ink: #f4f6f8;
+  --canvas: #f6f7f8;
   --panel: #ffffff;
-  --panel-2: #eef2f5;
-  --line: #dbe2e9;
-  --paper: #1a2530;
-  --dim: #66727f;
+  --panel-2: #f1f2f4;
+  --line: #e5e7eb;
+  --paper: #18191c;
+  --dim: #6b6f76;
+  --faint: #a7abb2;
   --amber: #b47d0e;
-  --amber-bg: #fdf3e0;
+  --amber-bg: #fdf6e7;
   --signal: #2e9e5b;
   --danger: #c2453c;
+  --radius: 0.625rem;
+  --shadow-panel: 0 1px 2px rgba(24, 25, 28, 0.05), 0 18px 40px -30px rgba(24, 25, 28, 0.28);
+  --sidebar-w: 264px;
 }
 
 @theme inline {
-  --color-ink: var(--ink);
+  --color-canvas: var(--canvas);
   --color-panel: var(--panel);
   --color-panel-2: var(--panel-2);
   --color-line: var(--line);
   --color-paper: var(--paper);
   --color-dim: var(--dim);
+  --color-faint: var(--faint);
   --color-amber: var(--amber);
   --color-amber-bg: var(--amber-bg);
   --color-signal: var(--signal);
@@ -34,7 +39,7 @@
 }
 
 body {
-  background: var(--ink);
+  background: var(--canvas);
   color: var(--paper);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
@@ -78,7 +83,7 @@ body {
   outline: none;
   transition: border-color 120ms ease;
 }
-.field::placeholder { color: var(--dim); opacity: 0.75; }
+.field::placeholder { color: var(--faint); }
 .field:focus { border-color: var(--amber); }
 
 .btn-primary {
@@ -110,7 +115,7 @@ body {
 }
 .btn-ghost:hover { color: var(--paper); border-color: var(--dim); }
 
-a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus-visible {
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible {
   outline: 2px solid var(--amber);
   outline-offset: 2px;
 }

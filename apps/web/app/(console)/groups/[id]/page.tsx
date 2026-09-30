@@ -123,21 +123,19 @@ export default function GroupPage() {
     URL.revokeObjectURL(url);
   }
 
-  if (loading || !user) {
-    return <main className="flex min-h-dvh items-center justify-center" />;
-  }
-
   if (error) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-16">
-        <p className="text-sm text-danger">{error}</p>
-        <Link href="/" className="btn-ghost mt-6 inline-block">← 返回</Link>
-      </main>
+      <div className="h-full overflow-y-auto">
+        <div className="mx-auto max-w-2xl px-6 py-16">
+          <p className="text-sm text-danger">{error}</p>
+          <Link href="/" className="btn-ghost mt-6 inline-block">← 返回</Link>
+        </div>
+      </div>
     );
   }
 
   if (!detail) {
-    return <main className="flex min-h-dvh items-center justify-center" />;
+    return <div className="h-full" />;
   }
 
   const { group, members, presence, goalPrompts } = detail;
@@ -146,28 +144,28 @@ export default function GroupPage() {
   const memberAgentIds = new Set(members.filter((m) => m.kind === "agent").map((m) => m.id));
 
   return (
-    <main className="mx-auto min-h-dvh max-w-6xl px-6 pb-24 pt-8 lg:px-10">
-      <Link href="/" className="plate transition-colors hover:text-paper">← wings</Link>
-
+    <div className="flex h-full min-h-0 flex-col">
       {/* 任务简报条 */}
-      <header className="mb-8 mt-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-line pb-5">
+      <header className="flex shrink-0 flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-line px-6 py-4 lg:px-8">
+        <Link href="/" className="plate transition-colors hover:text-paper lg:hidden">←</Link>
         <span className={`h-2 w-2 shrink-0 self-center rounded-full ${archived ? "bg-line" : "bg-signal live-dot"}`} />
-        <h1 className={`text-2xl font-semibold tracking-tight ${archived ? "text-dim" : "text-paper"}`}>
+        <h1 className={`text-xl font-semibold tracking-tight ${archived ? "text-dim" : "text-paper"}`}>
           {group.name}
         </h1>
         <span className="plate">
           {archived ? "已归档" : "进行中"} · SEQ {String(group.seq).padStart(3, "0")} · V{group.profile.announcementVersion}
         </span>
+        <button onClick={downloadExport} className="btn-ghost ml-auto">导出</button>
       </header>
 
-      <div className="grid gap-12 lg:grid-cols-[1fr_320px]">
-        {/* 消息流 */}
-        <section className="order-1 min-w-0">
-          <ul className="space-y-1">
+      <div className="grid min-h-0 flex-1 max-lg:overflow-y-auto lg:grid-cols-[1fr_320px] lg:overflow-hidden">
+        {/* 消息流：桌面端独立滚动 */}
+        <section className="min-w-0 lg:overflow-y-auto">
+          <ul className="mx-auto max-w-3xl space-y-1 px-6 py-5 lg:px-10">
             {messages.map((m) =>
               m.type === "system" ? (
                 <li key={m.id} className="flex items-baseline gap-4 py-2.5 text-[13px] text-dim">
-                  <span className="coord w-14 shrink-0 text-right text-[11px] text-dim/70">#{String(m.seq).padStart(3, "0")}</span>
+                  <span className="coord w-14 shrink-0 text-right text-[11px] text-faint">#{String(m.seq).padStart(3, "0")}</span>
                   <span className="border-l-2 border-dashed border-line pl-4">{m.body}</span>
                 </li>
               ) : (
@@ -184,7 +182,7 @@ export default function GroupPage() {
                       {m.refs.length > 0 && (
                         <span className="coord text-[11px] font-medium text-amber">↩#{m.refs.join(" #")}</span>
                       )}
-                      <span className="coord ml-auto text-[11px] text-dim/70">{timeStr(m.createdAt)}</span>
+                      <span className="coord ml-auto text-[11px] text-faint">{timeStr(m.createdAt)}</span>
                     </div>
                     <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-paper/90">{m.body}</p>
                     {m.evidence.length > 0 && <EvidenceList evidence={m.evidence} />}
@@ -192,16 +190,16 @@ export default function GroupPage() {
                 </li>
               ),
             )}
+            {messages.length === 0 && (
+              <li className="py-12 text-center text-sm text-dim">
+                还没有消息。让 agent 说第一句：<code className="coord text-xs">wings send "…"</code>
+              </li>
+            )}
           </ul>
-          {messages.length === 0 && (
-            <p className="py-12 text-center text-sm text-dim">
-              还没有消息。让 agent 说第一句：<code className="coord text-xs">wings send "…"</code>
-            </p>
-          )}
         </section>
 
-        {/* 侧栏：控制面板 */}
-        <aside className="order-2 space-y-8 lg:sticky lg:top-8 lg:self-start">
+        {/* 控制面板：桌面端独立滚动 */}
+        <aside className="space-y-8 border-line px-6 py-6 lg:overflow-y-auto lg:border-l lg:px-6">
           <section>
             <h3 className="plate mb-2 border-b border-line pb-2">目标 · {doneGoals}/{group.profile.goals.length}</h3>
             <ul className="space-y-2">
@@ -307,7 +305,7 @@ export default function GroupPage() {
                       </div>
                     )}
                     {addMsg && <p className="text-xs text-dim">{addMsg}</p>}
-                    <p className="text-xs text-dim">
+                    <p className="text-xs leading-relaxed text-dim">
                       人：先让对方在 wings 注册，再加邮箱。agent：从我的 agent 里选。
                     </p>
                   </div>
@@ -332,11 +330,9 @@ export default function GroupPage() {
               </div>
             </section>
           )}
-
-          <button onClick={downloadExport} className="btn-ghost w-full">导出 Markdown</button>
         </aside>
       </div>
-    </main>
+    </div>
   );
 }
 
