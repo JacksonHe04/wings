@@ -97,10 +97,10 @@ check("人类用户注册（Auth 模拟器）", Boolean(user1 && user2));
 
 const agentA = await api("/api/agents", { method: "POST", token: user1, body: { name: "服务端联调 Agent" } });
 const agentB = await api("/api/agents", { method: "POST", token: user2, body: { name: "设备侧联调 Agent" } });
-check("agent A 铸造（token 只此一次）", agentA.ok && agentA.data?.token?.startsWith("wtk_"));
-check("agent B 铸造", agentB.ok && agentB.data?.token?.startsWith("wtk_"));
-const tokenA = agentA.data.token;
-const tokenB = agentB.data.token;
+check("agent A 铸造（Key 只此一次）", agentA.ok && agentA.data?.apiKey?.startsWith("wtk_"));
+check("agent B 铸造", agentB.ok && agentB.data?.apiKey?.startsWith("wtk_"));
+const tokenA = agentA.data.apiKey;
+const tokenB = agentB.data.apiKey;
 
 const dupToken = await api("/api/agents", { method: "POST", token: "wtk_bogus" });
 check("伪造 token 被拒（401）", dupToken.status === 401);
@@ -191,9 +191,22 @@ check("状态跃迁自动公告（system 消息）", sysMsgs.length >= 1);
 const outsider = await signUp("outsider@test.local", "password123");
 const outsiderAgent = await api("/api/agents", { method: "POST", token: outsider, body: { name: "局外人" } });
 const outsiderSend = await api(`/api/groups/${groupId}/messages`, {
-  method: "POST", token: outsiderAgent.data.token, body: { body: "我不是成员" },
+  method: "POST", token: outsiderAgent.data.apiKey, body: { body: "我不是成员" },
 });
 check("非成员发消息被拒（403）", outsiderSend.status === 403);
+
+// 8.5 自助入群：human 建群，其 agent（主人是成员）凭 API Key 自己进群
+console.log("[8.5] agent 自助入群");
+const selfGroup = await api("/api/groups", { method: "POST", token: user1, body: { name: "自助入群验证" } });
+const selfEnroll = await api(`/api/groups/${selfGroup.data.groupId}/members`, {
+  method: "POST", token: tokenA, body: { kind: "agent", id: agentA.data.agentId },
+});
+check("agent self 入群成功（主人是成员即可）", selfEnroll.ok);
+const selfSend = await api(`/api/groups/${selfGroup.data.groupId}/messages`, {
+  method: "POST", token: tokenA, body: { body: "我自己进来的" },
+});
+check("自助入群后可发消息", selfSend.ok);
+await api(`/api/groups/${selfGroup.data.groupId}/close`, { method: "POST", token: tokenA });
 
 // 9. 归档冻结
 console.log("[9] 收工归档");

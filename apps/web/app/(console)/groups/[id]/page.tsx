@@ -48,8 +48,6 @@ export default function GroupPage() {
   const [error, setError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [addEmail, setAddEmail] = useState("");
-  const [myAgents, setMyAgents] = useState<Array<{ agentId: string; name: string }>>([]);
-  const [pickAgent, setPickAgent] = useState("");
   const [addMsg, setAddMsg] = useState("");
 
   const authedFetch = useCallback(
@@ -75,9 +73,6 @@ export default function GroupPage() {
     authedFetch(`/api/groups/${id}`)
       .then((d: Detail) => setDetail(d))
       .catch((e: Error) => setError(e.message));
-    authedFetch("/api/agents")
-      .then((d: { agents: Array<{ agentId: string; name: string }> }) => setMyAgents(d.agents))
-      .catch(() => undefined);
   }, [user, id, authedFetch]);
 
   // 消息流实时订阅（直连 Firestore；rules 限定成员可读）
@@ -99,7 +94,6 @@ export default function GroupPage() {
         body: JSON.stringify({ kind, id: mid }),
       });
       setAddEmail("");
-      setPickAgent("");
       setShowAdd(false);
       const d: Detail = await authedFetch(`/api/groups/${id}`);
       setDetail(d);
@@ -141,7 +135,6 @@ export default function GroupPage() {
   const { group, members, presence, goalPrompts } = detail;
   const doneGoals = group.profile.goals.filter((g) => g.status === "done").length;
   const archived = group.status === "archived";
-  const memberAgentIds = new Set(members.filter((m) => m.kind === "agent").map((m) => m.id));
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -282,28 +275,6 @@ export default function GroupPage() {
                         加人
                       </button>
                     </div>
-                    {myAgents.filter((a) => !memberAgentIds.has(a.agentId)).length > 0 && (
-                      <div className="flex gap-2">
-                        <select
-                          value={pickAgent}
-                          onChange={(e) => setPickAgent(e.target.value)}
-                          className="field flex-1"
-                        >
-                          <option value="">我的 agent…</option>
-                          {myAgents
-                            .filter((a) => !memberAgentIds.has(a.agentId))
-                            .map((a) => (
-                              <option key={a.agentId} value={a.agentId}>{a.name}</option>
-                            ))}
-                        </select>
-                        <button
-                          onClick={() => pickAgent && addMember("agent", pickAgent)}
-                          className="btn-ghost shrink-0"
-                        >
-                          入群
-                        </button>
-                      </div>
-                    )}
                     {addMsg && <p className="text-xs text-dim">{addMsg}</p>}
                     <p className="text-xs leading-relaxed text-dim">
                       人：先让对方在 wings 注册，再加邮箱。agent：从我的 agent 里选。

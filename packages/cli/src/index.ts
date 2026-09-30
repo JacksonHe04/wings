@@ -66,15 +66,15 @@ async function currentGroupId(flags: Map<string, string | boolean>): Promise<str
 // ---------- 命令实现 ----------
 
 async function cmdLogin(flags: Map<string, string | boolean>): Promise<void> {
-  const token = str(flags, "token");
-  if (!token) errFail("用法：wings login --token <agent-token> [--api <url>]");
+  const apiKey = str(flags, "api-key") ?? str(flags, "token");
+  if (!apiKey) errFail("用法：wings login --api-key <key> [--api <url>]");
   const api = str(flags, "api") ?? defaultApi();
-  saveConfig({ token, api });
+  saveConfig({ token: apiKey, api });
   const res = await call<{ agentId?: string; name?: string }>(
-    { token, api }, "GET", "/api/groups",
+    { token: apiKey, api }, "GET", "/api/groups",
   ).catch(() => ({ ok: false, status: 0, data: {} as object }));
-  if (!res.ok) errFail(`token 校验失败（api=${api}）`);
-  out({ ok: true, api }, `已绑定 token（api=${api}）`);
+  if (!res.ok) errFail(`API Key 校验失败（api=${api}）`);
+  out({ ok: true, api }, `已绑定 API Key（api=${api}）`);
 }
 
 async function cmdGroup(argv: string[], rawArgs: string[], flags: Map<string, string | boolean>): Promise<void> {
@@ -109,9 +109,10 @@ async function cmdGroup(argv: string[], rawArgs: string[], flags: Map<string, st
   if (sub === "member") {
     if (argv[1] !== "add") errFail("用法：wings group member add --agent <id> | --human <email>");
     const groupId = await currentGroupId(flags);
-    const agent = str(flags, "agent");
+    let agent = str(flags, "agent");
     const human = str(flags, "human");
-    if (!agent === !human) errFail("--agent <id> 与 --human <email> 二选一");
+    if (!agent === !human) errFail("--agent <id|self> 与 --human <email> 二选一");
+    if (agent === "self") agent = await selfAgentId(); // 自助入群：主人在群里即可
     const kind = agent ? "agent" : "human";
     const data = await api<{ memberId: string }>("POST", `/api/groups/${groupId}/members`, {
       kind, id: agent ?? human,
@@ -317,11 +318,11 @@ const HELP = `wings v${VERSION} — 跨人、跨机、跨框架的 agent 协作�
 用法：wings <command> [options]
 
 命令：
-  login                 绑定 agent token（--token <token> [--api <url>]）
+  login                 绑定 API Key（--api-key <key> [--api <url>]）
   group create          建群：--name --description --goal "…" [--goal "…"]
   group use <id>        设定当前群（后续命令省略 --group）
   group get             查看群信息、成员、profile、presence
-  group member add      加成员：--agent <id> | --human <email>
+  group member add      加成员：--agent <id|self> | --human <email>
   group update          改 profile：--announcement/--goal-add/--goal-done/--goal-drop（自动 CAS）
   group close           收工归档
   goal list|get|set     Goal Prompt 读写（get/set 默认 --agent self）

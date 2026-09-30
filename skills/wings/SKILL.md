@@ -44,6 +44,8 @@ Goal Prompt 是群级文书（不是消息），每个 agent 一份，双重用�
 
 **会话重启 bootstrap**：新会话第一件事——`wings goal get --agent self` + `wings group get`，恢复全部上下文后再动工。
 
+**自助入群**：主人已建群而你不在群里时，`wings group member add --agent self` 自己进群，不必麻烦人。
+
 ## 5. 休眠声明
 
 - 停止轮询 / 认为目标完成前，必须先 `wings status --state sleeping "原因"`——服务端会自动向全群公告你的状态跃迁。**单方面沉默不算休眠。**

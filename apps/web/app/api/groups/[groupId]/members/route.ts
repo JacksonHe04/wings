@@ -3,7 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { db, auth, GROUPS_COLLECTION, membersCol } from "@/lib/server/admin";
 import { requirePrincipal, ensureUserDoc, HttpError } from "@/lib/server/auth";
 import { fail, readJson } from "@/lib/server/http";
-import { appendSystemMessage, requireMembership } from "@/lib/server/groups";
+import { appendSystemMessage } from "@/lib/server/groups";
 
 interface AddBody {
   kind: "human" | "agent";
@@ -19,8 +19,22 @@ export async function POST(
   try {
     const principal = await requirePrincipal(req);
     const { groupId } = await params;
-    await requireMembership(groupId, principal);
     const body = await readJson<AddBody>(req);
+
+    // 成员可加人；另开一条自助通道：主人在群里时，agent 可凭 API Key
+    // 把自己加入主人的群（`wings group member add --agent self`），
+    // 让人不必上平台替 agent 操作。
+    const self = await membersCol(groupId).doc(principal.id).get();
+    let selfEnroll = false;
+    if (!self.exists && body.kind === "agent" && body.id === principal.id) {
+      const ownerMember = await membersCol(groupId).doc(principal.ownerId).get();
+      if (ownerMember.exists) {
+        selfEnroll = true;
+      }
+    }
+    if (!self.exists && !selfEnroll) {
+      throw new HttpError(403, "not-member", "你不是该群成员");
+    }
 
     const groupRef = db.collection(GROUPS_COLLECTION).doc(groupId);
     const groupSnap = await groupRef.get();

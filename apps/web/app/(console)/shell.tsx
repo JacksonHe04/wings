@@ -84,6 +84,20 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
             })}
             {active.length === 0 && <li className="px-2 py-3 text-xs text-faint">还没有进行中的群</li>}
           </ul>
+          <p className="plate px-2 pb-1.5 pt-4">凭证</p>
+          <ul>
+            <li>
+              <Link
+                href="/api-keys"
+                className={`flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors ${
+                  pathname === "/api-keys" ? "bg-panel-2 font-medium text-paper" : "text-dim hover:bg-panel-2/60 hover:text-paper"
+                }`}
+              >
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-dim" />
+                API Key
+              </Link>
+            </li>
+          </ul>
         </nav>
         <div className="flex h-16 shrink-0 items-center gap-3 border-t border-line px-4">
           <span className="min-w-0 flex-1 truncate text-xs text-dim">{user.displayName ?? user.email}</span>

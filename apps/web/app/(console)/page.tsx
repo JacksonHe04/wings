@@ -6,11 +6,6 @@ import { useRouter } from "next/navigation";
 import { useUser } from "@/lib/use-user";
 import type { GroupSummary } from "./shell";
 
-interface AgentSummary {
-  agentId: string;
-  name: string;
-}
-
 function relTime(ts: number): string {
   const d = new Date(ts);
   const now = new Date();
@@ -26,10 +21,6 @@ export default function HomePage() {
   const { user, loading, idToken } = useUser();
   const router = useRouter();
   const [groups, setGroups] = useState<GroupSummary[]>([]);
-  const [agents, setAgents] = useState<AgentSummary[]>([]);
-  const [newAgentName, setNewAgentName] = useState("");
-  const [minted, setMinted] = useState<{ agentId: string; token: string } | null>(null);
-  const [copied, setCopied] = useState<"token" | "command" | null>(null);
   const [form, setForm] = useState({ name: "", description: "", goals: "" });
   const [error, setError] = useState("");
 
@@ -56,9 +47,6 @@ export default function HomePage() {
     authedFetch("/api/groups")
       .then((d: { groups: GroupSummary[] }) => setGroups(d.groups))
       .catch((e: Error) => setError(e.message));
-    authedFetch("/api/agents")
-      .then((d: { agents: AgentSummary[] }) => setAgents(d.agents))
-      .catch(() => undefined);
   }, [user, authedFetch]);
 
   async function createGroup(e: React.FormEvent) {
@@ -75,32 +63,6 @@ export default function HomePage() {
       router.push(`/groups/${data.groupId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "建群失败");
-    }
-  }
-
-  async function createAgent(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newAgentName.trim()) return;
-    try {
-      const data = await authedFetch("/api/agents", {
-        method: "POST",
-        body: JSON.stringify({ name: newAgentName }),
-      });
-      setMinted(data);
-      setCopied(null);
-      setNewAgentName("");
-      setAgents((prev) => [...prev, { agentId: data.agentId, name: data.name }]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "创建 agent 失败");
-    }
-  }
-
-  async function revokeAgent(agentId: string) {
-    try {
-      await authedFetch(`/api/agents/${agentId}`, { method: "DELETE" });
-      setAgents((prev) => prev.filter((a) => a.agentId !== agentId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "撤销失败");
     }
   }
 
@@ -165,63 +127,6 @@ export default function HomePage() {
             />
             <button className="btn-primary">立项</button>
           </form>
-        </section>
-
-        {/* 我的 agent */}
-        <section className="mb-12">
-          <div className="mb-2 flex items-center justify-between border-b border-line pb-2">
-            <span className="plate">我的 agent</span>
-          </div>
-          <ul className="divide-y divide-line">
-            {agents.map((a) => (
-              <li key={a.agentId} className="flex items-center justify-between py-3.5">
-                <span className="text-[15px] text-paper">{a.name}</span>
-                <span className="flex items-center gap-4">
-                  <span className="coord hidden text-xs text-faint sm:inline">{a.agentId.slice(0, 10)}…</span>
-                  <button onClick={() => revokeAgent(a.agentId)} className="text-xs text-dim transition-colors hover:text-danger">
-                    撤销
-                  </button>
-                </span>
-              </li>
-            ))}
-            {agents.length === 0 && <li className="py-6 text-sm text-dim">还没有 agent。一个 agent 就是群体里的一双手。</li>}
-          </ul>
-          <form onSubmit={createAgent} className="mt-4 flex gap-2">
-            <input
-              value={newAgentName}
-              onChange={(e) => setNewAgentName(e.target.value)}
-              placeholder="新 agent 名称，如：服务端联调 Agent"
-              className="field flex-1"
-            />
-            <button className="btn-ghost shrink-0">创建</button>
-          </form>
-          {minted && (
-            <div className="mt-4 rounded-xl border border-amber/50 bg-amber-bg p-5">
-              <p className="plate" style={{ color: "var(--amber)" }}>Token 只显示这一次</p>
-              <code className="coord mt-2 block break-all text-[13px] text-paper">{minted.token}</code>
-              <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(minted.token);
-                    setCopied("token");
-                  }}
-                  className="btn-ghost"
-                >
-                  {copied === "token" ? "已复制 token" : "复制 token"}
-                </button>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`wings login --token ${minted.token}`);
-                    setCopied("command");
-                  }}
-                  className="btn-ghost"
-                >
-                  {copied === "command" ? "已复制命令" : "复制登录命令"}
-                </button>
-                <span className="text-xs text-dim">粘给 agent 即可上岗</span>
-              </div>
-            </div>
-          )}
         </section>
 
         {/* 已归档 */}

@@ -16,13 +16,14 @@ export function defaultApi(): string {
 }
 
 export function loadConfig(): WingsConfig {
-  if (process.env.WINGS_TOKEN) {
+  const envKey = process.env.WINGS_API_KEY ?? process.env.WINGS_TOKEN;
+  if (envKey) {
     const stored = readStored();
-    return { ...(stored ?? {}), token: process.env.WINGS_TOKEN, api: process.env.WINGS_API_URL ?? stored?.api ?? defaultApi() };
+    return { ...(stored ?? {}), token: envKey, api: process.env.WINGS_API_URL ?? stored?.api ?? defaultApi() };
   }
   const stored = readStored();
   if (!stored?.token || !stored?.api) {
-    console.error("wings: 未登录。请先 `wings login --token <agent-token>`（或设置 WINGS_TOKEN 环境变量）。");
+    console.error("wings: 未配置 API Key。请先 `wings login --api-key <key>`（或设置 WINGS_API_KEY 环境变量）。");
     process.exit(1);
   }
   return stored;

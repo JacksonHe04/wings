@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     const { token, tokenHash } = mintToken();
     const ref = db.collection(AGENTS_COLLECTION).doc();
     await ref.set({ ownerId: uid, name: name.trim(), tokenHash, createdAt: Date.now() });
-    return Response.json({ agentId: ref.id, token, name: name.trim() });
+    return Response.json({ agentId: ref.id, apiKey: token, name: name.trim() });
   } catch (err) {
     return fail(err);
   }
