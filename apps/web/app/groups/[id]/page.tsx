@@ -46,11 +46,19 @@ export default function GroupPage() {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState("");
+  const [showAdd, setShowAdd] = useState(false);
+  const [addEmail, setAddEmail] = useState("");
+  const [myAgents, setMyAgents] = useState<Array<{ agentId: string; name: string }>>([]);
+  const [pickAgent, setPickAgent] = useState("");
+  const [addMsg, setAddMsg] = useState("");
 
   const authedFetch = useCallback(
-    async (path: string) => {
+    async (path: string, init?: RequestInit) => {
       const token = await idToken();
-      const res = await fetch(path, { headers: { Authorization: `Bearer ${token}` } });
+      const res = await fetch(path, {
+        ...init,
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers },
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? `${res.status}`);
       return data;
@@ -67,6 +75,9 @@ export default function GroupPage() {
     authedFetch(`/api/groups/${id}`)
       .then((d: Detail) => setDetail(d))
       .catch((e: Error) => setError(e.message));
+    authedFetch("/api/agents")
+      .then((d: { agents: Array<{ agentId: string; name: string }> }) => setMyAgents(d.agents))
+      .catch(() => undefined);
   }, [user, id, authedFetch]);
 
   // 消息流实时订阅（直连 Firestore；rules 限定成员可读）
@@ -79,6 +90,24 @@ export default function GroupPage() {
       (err) => setError(err.message),
     );
   }, [user, id]);
+
+  async function addMember(kind: "human" | "agent", mid: string) {
+    setAddMsg("");
+    try {
+      await authedFetch(`/api/groups/${id}/members`, {
+        method: "POST",
+        body: JSON.stringify({ kind, id: mid }),
+      });
+      setAddEmail("");
+      setPickAgent("");
+      setShowAdd(false);
+      const d: Detail = await authedFetch(`/api/groups/${id}`);
+      setDetail(d);
+      setAddMsg(kind === "human" ? "已加入，让对方刷新即可看到" : "Agent 已入群");
+    } catch (err) {
+      setAddMsg(err instanceof Error ? err.message : "加成员失败");
+    }
+  }
 
   async function downloadExport() {
     const token = await idToken();
@@ -114,17 +143,16 @@ export default function GroupPage() {
   const { group, members, presence, goalPrompts } = detail;
   const doneGoals = group.profile.goals.filter((g) => g.status === "done").length;
   const archived = group.status === "archived";
+  const memberAgentIds = new Set(members.filter((m) => m.kind === "agent").map((m) => m.id));
 
   return (
-    <main className="mx-auto min-h-dvh max-w-5xl px-6 pb-24 pt-8">
+    <main className="mx-auto min-h-dvh max-w-6xl px-6 pb-24 pt-8 lg:px-10">
       <Link href="/" className="plate transition-colors hover:text-paper">← wings</Link>
 
       {/* 任务简报条 */}
-      <header className="mb-8 mt-4 flex flex-wrap items-baseline gap-x-4 gap-y-1 border-b border-line pb-4">
-        <span
-          className={`h-1.5 w-1.5 shrink-0 self-center rounded-full ${archived ? "bg-line" : "bg-signal live-dot"}`}
-        />
-        <h1 className={`text-xl font-semibold tracking-tight ${archived ? "text-dim" : "text-paper"}`}>
+      <header className="mb-8 mt-4 flex flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-line pb-5">
+        <span className={`h-2 w-2 shrink-0 self-center rounded-full ${archived ? "bg-line" : "bg-signal live-dot"}`} />
+        <h1 className={`text-2xl font-semibold tracking-tight ${archived ? "text-dim" : "text-paper"}`}>
           {group.name}
         </h1>
         <span className="plate">
@@ -132,33 +160,33 @@ export default function GroupPage() {
         </span>
       </header>
 
-      <div className="grid gap-10 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-12 lg:grid-cols-[1fr_320px]">
         {/* 消息流 */}
-        <section className="order-2 lg:order-1">
+        <section className="order-1 min-w-0">
           <ul className="space-y-1">
             {messages.map((m) =>
               m.type === "system" ? (
-                <li key={m.id} className="flex items-baseline gap-3 py-2 text-[13px] text-dim">
-                  <span className="coord w-12 shrink-0 text-right text-[11px] text-dim/60">#{String(m.seq).padStart(3, "0")}</span>
-                  <span className="border-l border-dashed border-line pl-3">{m.body}</span>
+                <li key={m.id} className="flex items-baseline gap-4 py-2.5 text-[13px] text-dim">
+                  <span className="coord w-14 shrink-0 text-right text-[11px] text-dim/70">#{String(m.seq).padStart(3, "0")}</span>
+                  <span className="border-l-2 border-dashed border-line pl-4">{m.body}</span>
                 </li>
               ) : (
-                <li key={m.id} className="group flex gap-3 rounded-md py-2.5 transition-colors hover:bg-panel-2/60">
-                  <span className="coord w-12 shrink-0 pt-0.5 text-right text-[11px] text-dim">
+                <li key={m.id} className="flex gap-4 rounded-lg py-3 transition-colors hover:bg-panel-2">
+                  <span className="coord w-14 shrink-0 pt-0.5 text-right text-[11px] text-dim">
                     #{String(m.seq).padStart(3, "0")}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="mb-0.5 flex flex-wrap items-baseline gap-x-2">
-                      <span className="text-[13px] font-medium text-paper">{nameOf(m.from, members)}</span>
+                    <div className="mb-1 flex flex-wrap items-baseline gap-x-3">
+                      <span className="text-sm font-medium text-paper">{nameOf(m.from, members)}</span>
                       {m.to !== "all" && (
                         <span className="coord text-[11px] text-dim">→ {m.to.slice(0, 8)}</span>
                       )}
                       {m.refs.length > 0 && (
-                        <span className="coord text-[11px] text-amber/80">↩#{m.refs.join(" #")}</span>
+                        <span className="coord text-[11px] font-medium text-amber">↩#{m.refs.join(" #")}</span>
                       )}
-                      <span className="coord ml-auto text-[11px] text-dim/60">{timeStr(m.createdAt)}</span>
+                      <span className="coord ml-auto text-[11px] text-dim/70">{timeStr(m.createdAt)}</span>
                     </div>
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-paper/90">{m.body}</p>
+                    <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-paper/90">{m.body}</p>
                     {m.evidence.length > 0 && <EvidenceList evidence={m.evidence} />}
                   </div>
                 </li>
@@ -166,17 +194,17 @@ export default function GroupPage() {
             )}
           </ul>
           {messages.length === 0 && (
-            <p className="py-10 text-center text-sm text-dim">
+            <p className="py-12 text-center text-sm text-dim">
               还没有消息。让 agent 说第一句：<code className="coord text-xs">wings send "…"</code>
             </p>
           )}
         </section>
 
         {/* 侧栏：控制面板 */}
-        <aside className="order-1 space-y-8 lg:order-2 lg:sticky lg:top-8 lg:self-start">
+        <aside className="order-2 space-y-8 lg:sticky lg:top-8 lg:self-start">
           <section>
-            <h3 className="plate mb-2 border-b border-line pb-1.5">目标 · {doneGoals}/{group.profile.goals.length}</h3>
-            <ul className="space-y-1.5">
+            <h3 className="plate mb-2 border-b border-line pb-2">目标 · {doneGoals}/{group.profile.goals.length}</h3>
+            <ul className="space-y-2">
               {group.profile.goals.map((g) => (
                 <li key={g.id} className="flex items-start gap-2 text-sm">
                   <span className={g.status === "done" ? "text-signal" : g.status === "dropped" ? "text-line" : "text-dim"}>
@@ -194,8 +222,8 @@ export default function GroupPage() {
 
           {group.profile.announcement && (
             <section>
-              <h3 className="plate mb-2 border-b border-line pb-1.5">公告</h3>
-              <p className="rounded-md border-l-2 border-amber bg-panel px-3 py-2 text-sm text-paper/90">
+              <h3 className="plate mb-2 border-b border-line pb-2">公告</h3>
+              <p className="rounded-lg border-l-[3px] border-amber bg-amber-bg px-3 py-2.5 text-sm text-paper/90">
                 {group.profile.announcement}
               </p>
             </section>
@@ -203,24 +231,24 @@ export default function GroupPage() {
 
           {group.profile.description && (
             <section>
-              <h3 className="plate mb-2 border-b border-line pb-1.5">背景</h3>
+              <h3 className="plate mb-2 border-b border-line pb-2">背景</h3>
               <p className="text-sm leading-relaxed text-paper/70">{group.profile.description}</p>
             </section>
           )}
 
           <section>
-            <h3 className="plate mb-2 border-b border-line pb-1.5">成员 · 在场</h3>
-            <ul className="space-y-1.5">
+            <h3 className="plate mb-2 border-b border-line pb-2">成员 · 在场</h3>
+            <ul className="space-y-2">
               {members.map((m) => {
                 const p = presence.find((x) => x.agentId === m.id);
                 return (
                   <li key={m.id} className="flex items-center justify-between text-sm">
-                    <span className="text-paper/90">
+                    <span className="truncate text-paper/90">
                       <span className="mr-1.5 text-dim">{m.kind === "agent" ? "◆" : "○"}</span>
                       {m.name}
                     </span>
                     {p ? (
-                      <span className="flex items-center gap-1.5 text-xs text-dim">
+                      <span className="flex shrink-0 items-center gap-1.5 text-xs text-dim">
                         <span
                           className={`h-1.5 w-1.5 rounded-full ${
                             p.state === "online" ? "bg-signal live-dot" : p.state === "sleeping" ? "bg-amber" : "bg-line"
@@ -228,22 +256,73 @@ export default function GroupPage() {
                         />
                         {p.activity || p.state}
                       </span>
-                    ) : (
-                      <span className="text-xs text-dim/50">{m.role === "owner" ? "owner" : ""}</span>
-                    )}
+                    ) : m.role === "owner" ? (
+                      <span className="plate shrink-0">owner</span>
+                    ) : null}
                   </li>
                 );
               })}
             </ul>
+
+            {!archived && (
+              <div className="mt-3">
+                {!showAdd ? (
+                  <button onClick={() => setShowAdd(true)} className="btn-ghost w-full">+ 添加成员</button>
+                ) : (
+                  <div className="space-y-2 rounded-lg border border-line bg-panel p-3">
+                    <div className="flex gap-2">
+                      <input
+                        value={addEmail}
+                        onChange={(e) => setAddEmail(e.target.value)}
+                        placeholder="对方的注册邮箱"
+                        className="field flex-1"
+                      />
+                      <button
+                        onClick={() => addEmail.trim() && addMember("human", addEmail.trim())}
+                        className="btn-ghost shrink-0"
+                      >
+                        加人
+                      </button>
+                    </div>
+                    {myAgents.filter((a) => !memberAgentIds.has(a.agentId)).length > 0 && (
+                      <div className="flex gap-2">
+                        <select
+                          value={pickAgent}
+                          onChange={(e) => setPickAgent(e.target.value)}
+                          className="field flex-1"
+                        >
+                          <option value="">我的 agent…</option>
+                          {myAgents
+                            .filter((a) => !memberAgentIds.has(a.agentId))
+                            .map((a) => (
+                              <option key={a.agentId} value={a.agentId}>{a.name}</option>
+                            ))}
+                        </select>
+                        <button
+                          onClick={() => pickAgent && addMember("agent", pickAgent)}
+                          className="btn-ghost shrink-0"
+                        >
+                          入群
+                        </button>
+                      </div>
+                    )}
+                    {addMsg && <p className="text-xs text-dim">{addMsg}</p>}
+                    <p className="text-xs text-dim">
+                      人：先让对方在 wings 注册，再加邮箱。agent：从我的 agent 里选。
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {goalPrompts.length > 0 && (
             <section>
-              <h3 className="plate mb-2 border-b border-line pb-1.5">Goal Prompts</h3>
-              <div className="space-y-1.5">
+              <h3 className="plate mb-2 border-b border-line pb-2">Goal Prompts</h3>
+              <div className="space-y-2">
                 {goalPrompts.map((gp) => (
-                  <details key={gp.agentId} className="rounded-md border border-line bg-panel">
-                    <summary className="cursor-pointer px-3 py-2 text-[13px] text-paper/80">
+                  <details key={gp.agentId} className="rounded-lg border border-line bg-panel">
+                    <summary className="cursor-pointer px-3 py-2.5 text-[13px] text-paper/80">
                       {members.find((m) => m.id === gp.agentId)?.name ?? gp.agentId.slice(0, 8)}
                       <span className="coord ml-2 text-[11px] text-dim">v{gp.version}</span>
                     </summary>
@@ -254,9 +333,7 @@ export default function GroupPage() {
             </section>
           )}
 
-          <button onClick={downloadExport} className="btn-ghost w-full">
-            导出 Markdown
-          </button>
+          <button onClick={downloadExport} className="btn-ghost w-full">导出 Markdown</button>
         </aside>
       </div>
     </main>
@@ -266,17 +343,17 @@ export default function GroupPage() {
 function EvidenceList({ evidence }: { evidence: Evidence[] }) {
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <div className="mt-1.5">
+    <div className="mt-2">
       {evidence.map((e) => (
         <div key={e.name} className="text-xs">
           <button
             onClick={() => setOpen(open === e.name ? null : e.name)}
             className="coord text-dim transition-colors hover:text-amber"
           >
-            📎 {e.name}{e.content ? "" : ""}
+            📎 {e.name}
           </button>
           {open === e.name && e.content && (
-            <pre className="mt-1 max-h-60 overflow-auto rounded-md border border-line bg-panel p-2 text-xs text-paper/80">
+            <pre className="mt-1.5 max-h-60 overflow-auto rounded-lg border border-line bg-panel p-3 text-xs text-paper/80">
               {e.content}
             </pre>
           )}

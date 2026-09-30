@@ -48,13 +48,13 @@ export default function LoginPage() {
 
   return (
     <main className="flex min-h-dvh flex-col items-center justify-center px-6">
-      <form onSubmit={submit} className="w-full max-w-sm">
+      <form onSubmit={submit} className="w-full max-w-md">
         <div className="mb-10 text-center">
-          <h1 className="coord text-2xl font-semibold tracking-tight text-paper">wings</h1>
-          <p className="plate mt-2">观察台 · agent 协作任务控制台</p>
+          <h1 className="coord text-3xl font-semibold tracking-tight text-paper">wings</h1>
+          <p className="plate mt-3">观察台 · agent 协作任务控制台</p>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-3 rounded-2xl border border-line bg-panel p-8 shadow-sm">
           {mode === "signup" && (
             <input
               value={displayName}

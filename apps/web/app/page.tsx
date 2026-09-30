@@ -37,7 +37,7 @@ export default function GroupsPage() {
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [newAgentName, setNewAgentName] = useState("");
   const [minted, setMinted] = useState<{ agentId: string; token: string } | null>(null);
-  const [mintedCopied, setMintedCopied] = useState(false);
+  const [copied, setCopied] = useState<"token" | "command" | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", goals: "" });
   const [error, setError] = useState("");
@@ -96,7 +96,7 @@ export default function GroupsPage() {
         body: JSON.stringify({ name: newAgentName }),
       });
       setMinted(data);
-      setMintedCopied(false);
+      setCopied(null);
       setNewAgentName("");
       setAgents((prev) => [...prev, { agentId: data.agentId, name: data.name }]);
     } catch (err) {
@@ -117,10 +117,13 @@ export default function GroupsPage() {
     return <main className="flex min-h-dvh items-center justify-center" />;
   }
 
+  const active = groups.filter((g) => g.status !== "archived");
+  const archived = groups.filter((g) => g.status === "archived");
+
   return (
-    <main className="mx-auto min-h-dvh max-w-2xl px-6 pb-24 pt-10">
+    <main className="mx-auto min-h-dvh max-w-4xl px-6 pb-24 pt-10 lg:px-10">
       <header className="mb-12 flex items-baseline justify-between">
-        <h1 className="coord text-xl font-semibold tracking-tight text-paper">wings</h1>
+        <h1 className="coord text-2xl font-semibold tracking-tight text-paper">wings</h1>
         <div className="flex items-center gap-4">
           <span className="text-sm text-dim">{user.displayName ?? user.email}</span>
           <button onClick={() => clientSignOut()} className="btn-ghost">退出</button>
@@ -130,7 +133,7 @@ export default function GroupsPage() {
       {error && <p className="mb-6 rounded-md border border-danger/40 px-3 py-2 text-sm text-danger">{error}</p>}
 
       <section className="mb-14">
-        <div className="mb-3 flex items-center justify-between border-b border-line pb-2">
+        <div className="mb-2 flex items-center justify-between border-b border-line pb-2">
           <span className="plate">群 · 任务</span>
           <button onClick={() => setShowCreate((v) => !v)} className="btn-ghost">
             {showCreate ? "收起" : "+ 建群"}
@@ -138,7 +141,7 @@ export default function GroupsPage() {
         </div>
 
         {showCreate && (
-          <form onSubmit={createGroup} className="mb-5 space-y-3 rounded-lg border border-line bg-panel p-4">
+          <form onSubmit={createGroup} className="my-5 space-y-3 rounded-xl border border-line bg-panel p-5 shadow-sm">
             <input
               required
               value={form.name}
@@ -165,58 +168,40 @@ export default function GroupsPage() {
         )}
 
         <ul className="divide-y divide-line">
-          {groups.map((g) => {
-            const done = g.profile.goals.filter((x) => x.status === "done").length;
-            const archived = g.status === "archived";
-            return (
-              <li key={g.id}>
-                <Link href={`/groups/${g.id}`} className="group flex items-center gap-4 py-3.5 transition-colors">
-                  <span
-                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                      archived ? "bg-line" : "bg-signal live-dot"
-                    }`}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className={`block truncate text-[15px] font-medium ${archived ? "text-dim" : "text-paper"}`}>
-                      {g.name}
-                    </span>
-                    {g.profile.description && (
-                      <span className="block truncate text-[13px] text-dim">{g.profile.description}</span>
-                    )}
-                  </span>
-                  {g.profile.goals.length > 0 && (
-                    <span className="coord shrink-0 text-xs text-dim" title={`${done}/${g.profile.goals.length} 目标完成`}>
-                      {g.profile.goals.map((x) => (
-                        <span key={x.id} className={x.status === "done" ? "text-signal" : x.status === "dropped" ? "text-line" : "text-dim"}>
-                          ▪
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  <span className="coord w-16 shrink-0 text-right text-xs text-dim">SEQ {String(g.seq).padStart(3, "0")}</span>
-                  <span className="w-24 shrink-0 text-right text-xs text-dim">{relTime(g.createdAt)}</span>
-                </Link>
-              </li>
-            );
-          })}
+          {active.map((g) => (
+            <GroupRow key={g.id} g={g} />
+          ))}
         </ul>
-        {groups.length === 0 && (
-          <p className="py-10 text-center text-sm text-dim">
-            还没有群。建一个，或者直接对你的 agent 说一句「把这轮联调管起来」。
+        {active.length === 0 && (
+          <p className="py-12 text-center text-sm text-dim">
+            进行中的群是空的。建一个，或者直接对你的 agent 说一句「把这轮联调管起来」。
           </p>
+        )}
+
+        {archived.length > 0 && (
+          <details className="mt-6">
+            <summary className="plate cursor-pointer select-none">
+              已归档 · {archived.length}
+            </summary>
+            <ul className="mt-2 divide-y divide-line">
+              {archived.map((g) => (
+                <GroupRow key={g.id} g={g} faded />
+              ))}
+            </ul>
+          </details>
         )}
       </section>
 
       <section>
-        <div className="mb-3 flex items-center justify-between border-b border-line pb-2">
+        <div className="mb-2 flex items-center justify-between border-b border-line pb-2">
           <span className="plate">我的 agent</span>
         </div>
         <ul className="divide-y divide-line">
           {agents.map((a) => (
-            <li key={a.agentId} className="flex items-center justify-between py-3">
+            <li key={a.agentId} className="flex items-center justify-between py-3.5">
               <span className="text-[15px] text-paper">{a.name}</span>
-              <span className="flex items-center gap-3">
-                <span className="coord text-xs text-dim">{a.agentId.slice(0, 10)}…</span>
+              <span className="flex items-center gap-4">
+                <span className="coord hidden text-xs text-dim sm:inline">{a.agentId.slice(0, 10)}…</span>
                 <button onClick={() => revokeAgent(a.agentId)} className="text-xs text-dim transition-colors hover:text-danger">
                   撤销
                 </button>
@@ -235,25 +220,61 @@ export default function GroupsPage() {
           <button className="btn-ghost shrink-0">创建</button>
         </form>
         {minted && (
-          <div className="mt-4 rounded-lg border border-amber/50 bg-panel p-4">
+          <div className="mt-4 rounded-xl border border-amber/60 bg-amber-bg p-5">
             <p className="plate" style={{ color: "var(--amber)" }}>Token 只显示这一次</p>
             <code className="coord mt-2 block break-all text-[13px] text-paper">{minted.token}</code>
-            <div className="mt-3 flex items-center justify-between">
-              <span className="text-xs text-dim">交给 agent：<code className="coord">wings login --token …</code></span>
+            <div className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(minted.token);
-                  setMintedCopied(true);
+                  setCopied("token");
                 }}
                 className="btn-ghost"
               >
-                {mintedCopied ? "已复制" : "复制"}
+                {copied === "token" ? "已复制 token" : "复制 token"}
               </button>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(`wings login --token ${minted.token}`);
+                  setCopied("command");
+                }}
+                className="btn-ghost"
+              >
+                {copied === "command" ? "已复制命令" : "复制登录命令"}
+              </button>
+              <span className="text-xs text-dim">粘给 agent 即可上岗</span>
             </div>
           </div>
         )}
       </section>
     </main>
+  );
+}
+
+function GroupRow({ g, faded = false }: { g: GroupSummary; faded?: boolean }) {
+  const done = g.profile.goals.filter((x) => x.status === "done").length;
+  return (
+    <li>
+      <Link href={`/groups/${g.id}`} className="flex items-center gap-4 py-4 transition-colors">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${faded ? "bg-line" : "bg-signal live-dot"}`} />
+        <span className="min-w-0 flex-1">
+          <span className={`block truncate text-[16px] font-medium ${faded ? "text-dim" : "text-paper"}`}>{g.name}</span>
+          {g.profile.description && (
+            <span className="mt-0.5 block truncate text-[13px] text-dim">{g.profile.description}</span>
+          )}
+        </span>
+        {g.profile.goals.length > 0 && (
+          <span className="coord hidden w-20 shrink-0 text-right text-sm sm:block" title={`${done}/${g.profile.goals.length} 目标完成`}>
+            <span className="text-dim">{done}</span>
+            <span className="text-dim/50">/{g.profile.goals.length}</span>
+          </span>
+        )}
+        <span className="coord hidden w-20 shrink-0 text-right text-xs text-dim md:block">
+          SEQ {String(g.seq).padStart(3, "0")}
+        </span>
+        <span className="w-24 shrink-0 text-right text-xs text-dim">{relTime(g.createdAt)}</span>
+      </Link>
+    </li>
   );
 }
 

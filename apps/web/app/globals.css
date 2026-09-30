@@ -1,20 +1,21 @@
 @import "tailwindcss";
 
 /*
- * wings 观察台 — 夜班控制室
- * 墨蓝夜色底，塔台琥珀只给交互与注意，信号绿只给在线。
+ * wings 观察台 — 白昼控制台
+ * 冷调纸白底，塔台琥珀只给注意与高亮，信号绿只给在线。
  * 签名：贯穿全站的等宽字坐标系统（seq / ID / 时间戳 / 铭牌按钮）。
  */
 :root {
-  --ink: #0b1015;
-  --panel: #111820;
-  --panel-2: #17202b;
-  --line: #232e3b;
-  --paper: #e7edf3;
-  --dim: #7e8b99;
-  --amber: #f0b341;
-  --signal: #5ec269;
-  --danger: #e0655c;
+  --ink: #f4f6f8;
+  --panel: #ffffff;
+  --panel-2: #eef2f5;
+  --line: #dbe2e9;
+  --paper: #1a2530;
+  --dim: #66727f;
+  --amber: #b47d0e;
+  --amber-bg: #fdf3e0;
+  --signal: #2e9e5b;
+  --danger: #c2453c;
 }
 
 @theme inline {
@@ -25,6 +26,7 @@
   --color-paper: var(--paper);
   --color-dim: var(--dim);
   --color-amber: var(--amber);
+  --color-amber-bg: var(--amber-bg);
   --color-signal: var(--signal);
   --color-danger: var(--danger);
   --font-sans: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
@@ -41,7 +43,7 @@ body {
 /* 控制台铭牌：等宽小字大写宽距 */
 .plate {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--dim);
@@ -67,16 +69,16 @@ body {
 /* 输入控件统一语气 */
 .field {
   width: 100%;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   background: var(--panel);
-  padding: 8px 12px;
+  padding: 9px 12px;
   font-size: 14px;
   color: var(--paper);
   outline: none;
   transition: border-color 120ms ease;
 }
-.field::placeholder { color: var(--dim); opacity: 0.7; }
+.field::placeholder { color: var(--dim); opacity: 0.75; }
 .field:focus { border-color: var(--amber); }
 
 .btn-primary {
@@ -84,25 +86,26 @@ body {
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  border-radius: 6px;
-  background: var(--amber);
-  color: var(--ink);
-  padding: 8px 16px;
-  font-weight: 600;
-  transition: filter 120ms ease;
+  border-radius: 8px;
+  background: var(--paper);
+  color: #fff;
+  padding: 9px 18px;
+  font-weight: 500;
+  transition: opacity 120ms ease;
 }
-.btn-primary:hover { filter: brightness(1.08); }
-.btn-primary:disabled { opacity: 0.5; }
+.btn-primary:hover { opacity: 0.85; }
+.btn-primary:disabled { opacity: 0.45; }
 
 .btn-ghost {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  border-radius: 6px;
+  border-radius: 8px;
   border: 1px solid var(--line);
   color: var(--dim);
-  padding: 6px 12px;
+  padding: 7px 13px;
+  background: var(--panel);
   transition: color 120ms ease, border-color 120ms ease;
 }
 .btn-ghost:hover { color: var(--paper); border-color: var(--dim); }
