@@ -19,9 +19,10 @@ type Session =
 /**
  * 当前登录的人类用户 + ID token 获取器（API 调用用）。
  *
- * 会话有两个来源，**顺序不能反**：先用本地持久化的 Firebase 会话；
- * 确实没有时，如果被 FDEA 嵌着，才去借父页面的登录态（见 embed-auth.ts）。
- * 反过来先握手的话，每次刷新都要白等一轮父页面回话。
+ * 会话有两个来源，**内嵌时 FDEA 身份优先**：被 FDEA 嵌着就是它在说你是谁，
+ * 本地遗留的会话不能压过它。反过来（本地优先、没有才握手）会出真事故——
+ * 实测踩到过：以 `odb` 进 FDEA，wings 里显示的却是上一次登录留下的 Luke。
+ * 只有在**没有父页面可问**（失败/超时）时，才回落到本地会话。
  */
 export function useUser(): {
   user: User | null;
@@ -36,22 +37,20 @@ export function useUser(): {
     let cancelled = false;
     const unsubscribe = onAuthStateChanged(clientAuth, (u) => {
       if (cancelled) return;
-      if (u) {
-        setSession({ phase: "ready", user: u });
+      if (isFramed() && !embedTried.current) {
+        embedTried.current = true;
+        setSession({ phase: "embedding" });
+        void connectToParent().then((ok) => {
+          if (cancelled) return;
+          // 成功时 signInWithCustomToken 多半会再触发一次本回调；这里直接读当前用户兜底，
+          // 免得万一那次回调没来就永远停在 embedding。
+          const current = clientAuth.currentUser;
+          if (ok && current) setSession({ phase: "ready", user: current });
+          else setSession(u ? { phase: "ready", user: u } : { phase: "anonymous" });
+        });
         return;
       }
-      // 本地确实没有会话。没被嵌着就到此为止，由调用方送去登录页。
-      if (!isFramed() || embedTried.current) {
-        setSession({ phase: "anonymous" });
-        return;
-      }
-      embedTried.current = true;
-      setSession({ phase: "embedding" });
-      void connectToParent().then((ok) => {
-        if (cancelled) return;
-        // 成功时 signInWithCustomToken 会再触发一次本回调并带上 u，这里只处理失败
-        if (!ok) setSession({ phase: "anonymous" });
-      });
+      setSession(u ? { phase: "ready", user: u } : { phase: "anonymous" });
     });
     return () => {
       cancelled = true;

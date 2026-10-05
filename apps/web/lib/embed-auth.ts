@@ -9,8 +9,7 @@
  * 时序：wings 广播「我在这儿」→ 父页面回一张 60s 票据 → wings 拿去换会话。
  * 没等到就落回登录页——父页面可能不是 FDEA，或者 FDEA 自己也没登录。
  */
-import { signInWithCustomToken } from "firebase/auth";
-import { clientAuth } from "./firebase";
+import { signInWithSession, type SessionGrant } from "./sign-in";
 
 /** 只接受这些来源递来的票据（NEXT_PUBLIC_WINGS_EMBED_PARENTS，逗号分隔）。 */
 const ALLOWED_PARENTS = (process.env.NEXT_PUBLIC_WINGS_EMBED_PARENTS ?? "")
@@ -69,7 +68,7 @@ export async function connectToParent(): Promise<boolean> {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message ?? "接入失败");
-    await signInWithCustomToken(clientAuth, data.token);
+    await signInWithSession(data as SessionGrant);
     return true;
   } catch {
     return false;

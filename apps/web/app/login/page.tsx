@@ -9,8 +9,7 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signInWithCustomToken } from "firebase/auth";
-import { clientAuth } from "@/lib/firebase";
+import { signInWithSession, type SessionGrant } from "@/lib/sign-in";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,7 +31,7 @@ export default function LoginPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.message ?? "登录失败");
-      await signInWithCustomToken(clientAuth, data.token);
+      await signInWithSession(data as SessionGrant);
       router.replace("/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败，稍后再试");

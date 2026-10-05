@@ -41,7 +41,8 @@ export async function POST(req: NextRequest) {
       [PLATFORM_ADMIN_CLAIM]: identity.isPlatformAdmin === true,
       provider: identity.provider,
     });
-    return Response.json({ token });
+    // account 一并回给客户端：新身份没有 Firebase displayName，由它补上
+    return Response.json({ token, account: identity.account ?? null });
   } catch (err) {
     return fail(err);
   }
