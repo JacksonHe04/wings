@@ -19,6 +19,8 @@ const ALLOWED_PARENTS = (process.env.NEXT_PUBLIC_WINGS_EMBED_PARENTS ?? "")
 
 const READY = "wings:ready";
 const TICKET = "wings:ticket";
+const ROUTE = "wings:route";
+const NAVIGATE = "wings:navigate";
 
 /** 握手等待上限：到点就走登录页，不留白屏。 */
 const HANDSHAKE_TIMEOUT_MS = 5000;
@@ -28,12 +30,14 @@ export function isFramed(): boolean {
   return typeof window !== "undefined" && window.parent !== window;
 }
 
+/** 白名单为空表示不做来源预判——票据本身还要服务端验签，这一步只是多一道闸。 */
+function fromTrustedParent(origin: string): boolean {
+  return ALLOWED_PARENTS.length === 0 || ALLOWED_PARENTS.includes(origin);
+}
+
 /** 向父页面要一张票据；超时或来源不可信都返回 null。 */
 function requestTicketFromParent(): Promise<string | null> {
   return new Promise((resolve) => {
-    // 白名单为空表示不做来源预判——票据本身还要服务端验签，这一步只是多一道闸
-    const trusted = (origin: string) => ALLOWED_PARENTS.length === 0 || ALLOWED_PARENTS.includes(origin);
-
     const finish = (ticket: string | null) => {
       clearTimeout(timer);
       window.removeEventListener("message", onMessage);
@@ -41,7 +45,7 @@ function requestTicketFromParent(): Promise<string | null> {
     };
     const timer = setTimeout(() => finish(null), HANDSHAKE_TIMEOUT_MS);
     function onMessage(event: MessageEvent) {
-      if (!trusted(event.origin)) return;
+      if (!fromTrustedParent(event.origin)) return;
       const data = event.data as { type?: string; ticket?: string } | null;
       if (data?.type !== TICKET || typeof data.ticket !== "string") return;
       finish(data.ticket);
@@ -73,4 +77,30 @@ export async function connectToParent(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * 把 iframe 里的当前位置告诉父页面，让浏览器地址栏跟上。
+ *
+ * 不这么做的话，地址栏会一直停在父页面的入口路径上——用户点进某个群，
+ * 地址栏看不出来，刷新还会被送回首页，链接也没法分享。
+ */
+export function reportRouteToParent(path: string): void {
+  if (!isFramed()) return;
+  window.parent.postMessage({ type: ROUTE, path }, "*");
+}
+
+/**
+ * 监听父页面的导航指令（深链直达、浏览器后退/前进）。
+ * 返回取消订阅的函数。
+ */
+export function onParentNavigate(handler: (path: string) => void): () => void {
+  const listener = (event: MessageEvent) => {
+    if (!fromTrustedParent(event.origin)) return;
+    const data = event.data as { type?: string; path?: string } | null;
+    if (data?.type !== NAVIGATE || typeof data.path !== "string") return;
+    handler(data.path);
+  };
+  window.addEventListener("message", listener);
+  return () => window.removeEventListener("message", listener);
 }
