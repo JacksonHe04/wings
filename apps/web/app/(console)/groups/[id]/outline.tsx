@@ -5,7 +5,7 @@
  * 只列人与 agent 的消息——system 消息（状态跃迁、goal 变更自动产生）量大且无主，
  * 列进来会把目录淹掉；它们仍在中栏显示，只是不进目录。
  */
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { isOutlineItem, messageAuthorName } from "@/lib/messages";
 import { hhmm } from "@/lib/time";
@@ -25,12 +25,23 @@ export function MessageOutline({
   onJump: (seq: number) => void;
 }) {
   const items = useMemo(() => messages.filter(isOutlineItem), [messages]);
+  const listRef = useRef<HTMLUListElement | null>(null);
+  const landedRef = useRef(false);
+
+  // 与中栏消息区同构：进群先落到最新那条（目录可能很长），此后不再抢用户的滚动位置
+  useEffect(() => {
+    const ul = listRef.current;
+    if (!ul || landedRef.current || items.length === 0) return;
+    ul.scrollTop = ul.scrollHeight;
+    landedRef.current = true;
+  }, [items]);
+
   return (
     <nav aria-label="消息目录" className="flex h-full flex-col">
       <div className="shrink-0 border-b border-border px-4 py-3">
         <span className="plate">目录 · {items.length}</span>
       </div>
-      <ul className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
+      <ul ref={listRef} className="min-h-0 flex-1 overflow-y-auto px-2 py-2">
         {items.map((m) => {
           const active = m.seq === activeSeq;
           return (
