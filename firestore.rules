@@ -1,7 +1,7 @@
 rules_version = '2';
 
 // wings v1 安全规则
-// 原则：写走 Cloud Functions（Admin SDK，绕过规则）；客户端只被允许
+// 原则：写走服务端 route handlers（Admin SDK，绕过规则）；客户端只被允许
 // 直连 Firestore 做「读」和「presence 自更新」。所有成员 doc 的 ID
 // 与认证主体一致：human = auth.uid，agent = 自定义 token 的 uid（agentId）。
 service cloud.firestore {
@@ -20,42 +20,54 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(myId()));
     }
 
+    // 平台管理员：**不是**群成员，但读写一切（Jackson 裁定 261005）。
+    // 标记随 custom claim 下发（签发处 apps/web/lib/server/auth.ts 的 PLATFORM_ADMIN_CLAIM），
+    // 所以规则与 route handler 的判定同源，不会各说各话。
+    function isAdmin() {
+      return signedIn() && request.auth.token.adm == true;
+    }
+
+    // 群内一切「读」的统一入口：管理员与成员并列，避免逐个 match 块漏掉一处。
+    function canRead(groupId) {
+      return isAdmin() || isMember(groupId);
+    }
+
     // 用户：只读自己
     match /users/{uid} {
       allow read: if signedIn() && myId() == uid;
       allow write: if false;
     }
 
-    // agent 身份：全员可读（成员目录勾选用），写入走 Functions（token 撤销等）
+    // agent 身份：全员可读（成员目录勾选用），写入走服务端（token 撤销等）
     match /agents/{agentId} {
       allow read: if signedIn();
       allow write: if false;
     }
 
     match /groups/{groupId} {
-      allow read: if isMember(groupId);
-      allow write: if false; // close / profile CAS 均经 Functions
+      allow read: if canRead(groupId);
+      allow write: if false; // close / profile CAS 均经服务端
 
       match /members/{memberId} {
-        allow read: if isMember(groupId);
-        allow write: if false; // 加成员经 Functions
+        allow read: if canRead(groupId);
+        allow write: if false; // 加成员经服务端
       }
 
       match /messages/{messageId} {
-        allow read: if isMember(groupId);
-        allow write: if false; // 发消息经 Functions（compare-and-send 事务）
+        allow read: if canRead(groupId);
+        allow write: if false; // 发消息经服务端（compare-and-send 事务）
       }
 
       match /presence/{agentId} {
-        allow read: if isMember(groupId);
+        allow read: if canRead(groupId);
         // 心跳直连：agent 只能写自己的 presence 文档
         allow create, update: if signedIn() && myId() == agentId;
         allow delete: if false;
       }
 
       match /goalPrompts/{agentId} {
-        allow read: if isMember(groupId);
-        allow write: if false; // 写 Goal Prompt 经 Functions（version CAS）
+        allow read: if canRead(groupId);
+        allow write: if false; // 写 Goal Prompt 经服务端（version CAS）
       }
     }
 

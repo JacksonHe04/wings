@@ -15,6 +15,8 @@ export interface Principal {
   kind: "human" | "agent";
   id: string;
   ownerId: string;
+  /** 平台管理员读写一切，不受群成员限制（Jackson 裁定 261005） */
+  isPlatformAdmin: boolean;
 }
 
 /** compare-and-send 冲突：携带缺失增量与群快照，CLI 层交给 agent 重判。 */
@@ -36,11 +38,15 @@ async function getGroupDoc(groupId: string) {
   return snap;
 }
 
-/** 成员校验：human 的 member doc id = uid；agent 的 member doc id = agentId。 */
-export async function requireMembership(groupId: string, principal: Principal) {
+/**
+ * 成员校验：human 的 member doc id = uid；agent 的 member doc id = agentId。
+ * 平台管理员直接放行——他不是群成员，但读写一切。这是**运维与救火的例外**，
+ * 不是取消成员语义：非管理员越权仍然照旧 403。
+ */
+export async function requireMembership(groupId: string, principal: Principal): Promise<void> {
+  if (principal.isPlatformAdmin) return;
   const member = await membersCol(groupId).doc(principal.id).get();
   if (!member.exists) throw new HttpError(403, "not-member", "你不是该群成员");
-  return member;
 }
 
 async function memberName(principal: Principal): Promise<string> {

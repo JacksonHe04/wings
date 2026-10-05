@@ -91,16 +91,15 @@ export async function POST(req: NextRequest) {
   }
 }
 
-/** 我参与的群列表（memberIds 冗余数组反查）。 */
+/** 群列表：默认「我参与的群」（memberIds 冗余数组反查）；平台管理员看全部。 */
 export async function GET(req: NextRequest) {
   try {
     const principal = await requirePrincipal(req);
-    const snap = await db
-      .collection(GROUPS_COLLECTION)
-      .where("memberIds", "array-contains", principal.id)
-      .orderBy("createdAt", "desc")
-      .limit(50)
-      .get();
+    // 管理员的列表也得是全部，否则他读写一切却够不着入口，管理面等于空的
+    const query = principal.isPlatformAdmin
+      ? db.collection(GROUPS_COLLECTION)
+      : db.collection(GROUPS_COLLECTION).where("memberIds", "array-contains", principal.id);
+    const snap = await query.orderBy("createdAt", "desc").limit(50).get();
     const groups = snap.docs.map((d) => ({
       id: d.id,
       name: d.get("name"),
