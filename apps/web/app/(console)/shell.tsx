@@ -3,18 +3,37 @@
 /**
  * 控制台外壳：侧栏（群导航）+ 主区。
  *
- * 侧栏取值按 fde-anything Studio 的侧栏来——同样的 `--sidebar-*` 令牌、同样的
- * `--app-header-height` 顶栏高度、同样的条目圆角与悬停底色：两个产品并排时不该看得出接缝。
- * 外壳永远不滚动，各页面自管滚动区（`h-svh overflow-hidden`）；
- * 移动端侧栏隐藏，首页主区自带群列表（见 page.tsx 的 lg:hidden 区块）。
+ * 侧栏直接用 fde-anything 同款的 shadcn `Sidebar`——同一套折叠机制、同一个折叠图标、
+ * 同样的 14rem 宽度，两个产品并排才看不出接缝。**默认折叠**（Jackson 261005）。
+ * 外壳永远不滚动，各页面自管滚动区。
+ *
+ * 内嵌在 FDEA 里时**不提供身份与登出**：这两件事都归 FDEA 管，这边再来一份只是重复，
+ * 而且"登出"根本没有意义——登不登出取决于 FDEA。
  */
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { KeyRound, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
+import { isFramed } from "@/lib/embed-auth";
 import { useRouteSync } from "@/lib/use-route-sync";
 import { useUser } from "@/lib/use-user";
 import { cn } from "@/lib/utils";
@@ -64,119 +83,140 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
       .finally(() => setGroupsLoading(false));
   }, [user, pathname, authedFetch]);
 
+  // 鉴权未落定前整块占位：SSR 与首次客户端渲染都走这条，不会有水合不一致
   if (loading || !user) {
     return <div className="flex h-svh items-center justify-center" />;
   }
 
   const active = groups.filter((g) => g.status !== "archived");
   const archived = groups.filter((g) => g.status === "archived");
+  // 内嵌时身份与登出归 FDEA
+  const embedded = isFramed();
 
   return (
-    <div className="flex h-svh overflow-hidden">
-      {/* 侧栏：群导航 */}
-      <aside className="hidden w-(--sidebar-w) shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
-        <div className="flex h-(--app-header-height) shrink-0 items-center border-b border-sidebar-border px-4">
-          <Link href="/" className="text-lg font-semibold tracking-tight">
-            wings
+    <SidebarProvider defaultOpen={false} className="h-svh overflow-hidden">
+      <Sidebar collapsible="icon" className="border-r">
+        {/* 头部高度与主区顶栏同源(--app-header-height):两条分隔线才对得齐 */}
+        <SidebarHeader className="h-(--app-header-height) shrink-0 justify-center border-b border-sidebar-border px-2">
+          <Link
+            href="/"
+            className="flex h-8 items-center px-2 text-lg font-semibold tracking-tight group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+          >
+            <span className="group-data-[collapsible=icon]:hidden">wings</span>
+            <span className="hidden text-base group-data-[collapsible=icon]:inline">w</span>
           </Link>
-        </div>
-        <nav className="flex-1 overflow-y-auto p-2">
-          <p className="plate px-2 pt-2 pb-1.5">群 · 任务</p>
-          <ul>
+        </SidebarHeader>
+
+        <SidebarContent className="py-2">
+          <NavSection label="群 · 任务">
             {groupsLoading && (
-              <li className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
-                <Spinner className="size-3.5" />
-                加载中
-              </li>
+              <SidebarMenuItem>
+                <SidebarMenuButton tooltip="加载中">
+                  <Spinner className="size-4 shrink-0" />
+                  <span>加载中</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             )}
             {!groupsLoading &&
               active.map((g) => (
-                <GroupRow key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
+                <GroupItem key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
               ))}
             {!groupsLoading && active.length === 0 && (
-              <li className="px-2 py-3 text-xs text-text-tertiary">还没有进行中的群</li>
+              <li className="px-2 py-2 text-xs text-text-tertiary group-data-[collapsible=icon]:hidden">
+                还没有进行中的群
+              </li>
             )}
-          </ul>
+          </NavSection>
+
           {!groupsLoading && archived.length > 0 && (
-            <>
-              <p className="plate px-2 pt-4 pb-1.5">已归档 · {archived.length}</p>
-              <ul>
-                {archived.map((g) => (
-                  <GroupRow key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
-                ))}
-              </ul>
-            </>
+            <NavSection label={`已归档 · ${archived.length}`}>
+              {archived.map((g) => (
+                <GroupItem key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
+              ))}
+            </NavSection>
           )}
-          <p className="plate px-2 pt-4 pb-1.5">凭证</p>
-          <ul>
-            <li>
-              <NavRow href="/api-keys" current={pathname === "/api-keys"} dot="outline">
-                API Key
-              </NavRow>
-            </li>
-          </ul>
-        </nav>
-        <div className="flex h-(--app-header-height) shrink-0 items-center gap-2 border-t border-sidebar-border px-4">
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            {user.displayName ?? user.email ?? user.uid.slice(0, 8)}
-          </span>
-          <Button variant="ghost" size="icon-sm" onClick={() => clientSignOut()} title="退出" aria-label="退出">
-            <LogOut />
-          </Button>
-        </div>
-      </aside>
+
+          <NavSection label="凭证">
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={pathname === "/api-keys"} tooltip="API Key">
+                <Link href="/api-keys">
+                  <KeyRound />
+                  <span>API Key</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </NavSection>
+        </SidebarContent>
+
+        {/* 底部与头部同高(--app-header-height):侧栏上下两条分隔线对称 */}
+        <SidebarFooter className="h-(--app-header-height) shrink-0 justify-center border-t border-sidebar-border p-2">
+          <div className="flex h-9 items-center gap-2 overflow-hidden rounded-md px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            {!embedded && (
+              <>
+                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+                  {user.displayName ?? user.email ?? user.uid.slice(0, 8)}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 group-data-[collapsible=icon]:hidden"
+                  onClick={() => clientSignOut()}
+                  title="退出"
+                  aria-label="退出"
+                >
+                  <LogOut />
+                </Button>
+              </>
+            )}
+            <SidebarTrigger className="shrink-0" />
+          </div>
+        </SidebarFooter>
+
+        {/* 折叠热区从头部下沿开始,避免压在品牌上 */}
+        <SidebarRail className="top-(--app-header-height)" />
+      </Sidebar>
 
       {/* 主区：页面自管滚动 */}
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
-    </div>
+      <SidebarInset className="flex h-svh min-w-0 flex-col overflow-hidden bg-canvas">{children}</SidebarInset>
+    </SidebarProvider>
   );
 }
 
-/** 侧栏条目：进行中用信号绿点，归档弱化成灰点，当前页高亮。 */
-function GroupRow({ group, current }: { group: GroupSummary; current: boolean }) {
+/** 分组：标题 + 圆角框只做视觉分区（与 FDEA 侧栏同构），折叠态收掉框与标题。 */
+function NavSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <SidebarGroup className="px-2 py-1">
+      <SidebarGroupLabel>{label}</SidebarGroupLabel>
+      <SidebarGroupContent className="rounded-xl border border-sidebar-border p-1 group-data-[collapsible=icon]:rounded-none group-data-[collapsible=icon]:border-transparent group-data-[collapsible=icon]:p-0">
+        <SidebarMenu>{children}</SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+}
+
+function GroupItem({ group, current }: { group: GroupSummary; current: boolean }) {
   const archived = group.status === "archived";
   return (
-    <li>
-      <NavRow href={`/groups/${group.id}`} current={current} muted={archived} dot={archived ? "muted" : "online"}>
-        {group.name}
-      </NavRow>
-    </li>
-  );
-}
-
-/** 侧栏一行的统一形态：圆点 + 文本，悬停/选中的底色与圆角取自 `--sidebar-accent`。 */
-function NavRow({
-  href,
-  current,
-  children,
-  dot,
-  muted,
-}: {
-  href: string;
-  current: boolean;
-  children: React.ReactNode;
-  dot: "online" | "outline" | "muted";
-  muted?: boolean;
-}) {
-  const dotClass =
-    dot === "online" ? "bg-presence-online" : dot === "outline" ? "border border-muted-foreground" : "bg-border";
-  return (
-    <Link
-      href={href}
-      aria-current={current ? "page" : undefined}
-      className={cn(
-        "flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors",
-        current
-          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
-          : cn(
-              "hover:bg-sidebar-accent/60",
-              muted ? "text-text-tertiary" : "text-muted-foreground hover:text-foreground",
-            ),
-      )}
-    >
-      <span className={cn("size-1.5 shrink-0 rounded-full", dotClass)} />
-      <span className="truncate">{children}</span>
-    </Link>
+    <SidebarMenuItem>
+      <SidebarMenuButton asChild isActive={current} tooltip={group.name}>
+        <Link href={`/groups/${group.id}`}>
+          {/* 折叠态只剩这个字形，所以它得能区分不同的群——取名字首字。
+              16px 是为了放得进折叠后的 32px 按钮（内边距 8px，内容区正好 16px）。 */}
+          <span
+            aria-hidden
+            className={cn(
+              "flex size-4 shrink-0 items-center justify-center rounded-sm border text-[9px] leading-none font-medium",
+              archived
+                ? "border-sidebar-border text-text-tertiary"
+                : "border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground",
+            )}
+          >
+            {group.name.slice(0, 1)}
+          </span>
+          <span>{group.name}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
   );
 }
 
