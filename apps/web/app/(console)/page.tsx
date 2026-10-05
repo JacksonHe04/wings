@@ -5,7 +5,7 @@
  * 建群表单收进右上角「+」拉出的浮层，不再占着正文；桌面端的群导航在侧栏（shell），
  * 移动端侧栏不可见，所以群列表在本页正文里再列一份。
  */
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Plus } from "lucide-react";
@@ -15,46 +15,25 @@ import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useGroups } from "@/lib/groups-context";
 import { relTime } from "@/lib/time";
+import { useAuthedFetch } from "@/lib/use-authed-fetch";
 import { useUser } from "@/lib/use-user";
 
-import type { GroupSummary } from "./shell";
-
 export default function HomePage() {
-  const { user, loading, idToken } = useUser();
+  const { user, loading } = useUser();
   const router = useRouter();
-  const [groups, setGroups] = useState<GroupSummary[]>([]);
-  const [groupsLoading, setGroupsLoading] = useState(true);
+  // 群列表与侧栏共用一份（GroupsProvider）；建群后本页会跳转，回来时列表已随路由刷新
+  const { groups, loading: groupsLoading, error: groupsError } = useGroups();
+  const authedFetch = useAuthedFetch();
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", goals: "" });
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
-  const authedFetch = useCallback(
-    async (path: string, init?: RequestInit) => {
-      const token = await idToken();
-      const res = await fetch(path, {
-        ...init,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? data.error ?? `${res.status}`);
-      return data;
-    },
-    [idToken],
-  );
-
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
-
-  useEffect(() => {
-    if (!user) return;
-    authedFetch("/api/groups")
-      .then((d: { groups: GroupSummary[] }) => setGroups(d.groups))
-      .catch((e: Error) => setError(e.message))
-      .finally(() => setGroupsLoading(false));
-  }, [user, authedFetch]);
 
   async function createGroup(e: React.FormEvent) {
     e.preventDefault();
@@ -103,8 +82,10 @@ export default function HomePage() {
 
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto max-w-3xl px-6 py-8 lg:px-10">
-          {error && (
-            <p className="mb-6 rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive">{error}</p>
+          {(error || groupsError) && (
+            <p className="mb-6 rounded-md border border-destructive/40 px-3 py-2 text-sm text-destructive">
+              {error || groupsError}
+            </p>
           )}
 
           {/* 移动端：侧栏不可见，群列表在这里 */}
