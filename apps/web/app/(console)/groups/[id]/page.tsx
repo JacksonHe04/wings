@@ -1,14 +1,23 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { ArrowLeft, Download, Trash2 } from "lucide-react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
-import { useUser } from "@/lib/use-user";
+
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
 import { clientDb } from "@/lib/firebase";
-import { Spinner } from "../../spinner";
-import { GroupAside } from "./aside";
+import { messageAuthorName } from "@/lib/messages";
+import { hhmmss, relTime } from "@/lib/time";
 import type { Evidence, GoalPrompt, Group, Member, Message, Presence } from "@/lib/types";
+import { cn } from "@/lib/utils";
+import { useUser } from "@/lib/use-user";
+
+import { GoalsPanel } from "./goals";
+import { MessageOutline } from "./outline";
+import { DetailSheet, type DetailPanel } from "./panels";
 
 interface Detail {
   group: Group;
@@ -18,17 +27,12 @@ interface Detail {
   canDelete: boolean;
 }
 
-function timeStr(ts: number): string {
-  const d = new Date(ts);
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}:${String(d.getSeconds()).padStart(2, "0")}`;
-}
-
-function nameOf(from: Message["from"], members: Member[]): string {
-  if (from.kind === "system") return "系统";
-  const m = members.find((x) => x.id === from.id);
-  const short = from.id.slice(0, 8);
-  return m ? m.name : `${from.kind}:${short}`;
-}
+/** 顶栏的三个入口，顺序即 Jackson 定的顺序（261005）。 */
+const ENTRIES: Array<{ key: DetailPanel; label: string }> = [
+  { key: "description", label: "背景" },
+  { key: "goalPrompts", label: "Goal Prompt" },
+  { key: "members", label: "成员" },
+];
 
 /** 路由壳：给视图挂 key，换群时整块重挂载——详情、消息、浮层状态自然归零。 */
 export default function GroupPage() {
@@ -42,9 +46,11 @@ function GroupView({ id }: { id: string }) {
   const [detail, setDetail] = useState<Detail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [error, setError] = useState("");
-  const [showDetail, setShowDetail] = useState(false);
+  const [panel, setPanel] = useState<DetailPanel | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  /** 目录里高亮到哪一条：由滚动位置驱动，点目录也会立刻置上 */
+  const [activeSeq, setActiveSeq] = useState<number | null>(null);
   // 消息区滚动落底：首次进入要停在最新消息处
   const listRef = useRef<HTMLElement | null>(null);
   const landedRef = useRef(false);
@@ -102,7 +108,38 @@ function GroupView({ id }: { id: string }) {
     }
   }, [messages, detail]);
 
-  /** 加成员：成功后刷新详情；失败直接抛给调用方（GroupAside）展示。 */
+  /**
+   * 目录高亮跟随滚动：取最后一条已经越过容器顶端（留一点余量）的消息。
+   * 用 rAF 收口——滚动事件比帧还密，逐次全量量一遍 DOM 是白烧。
+   */
+  const rafRef = useRef<number | null>(null);
+  const syncActiveOnScroll = useCallback(() => {
+    if (rafRef.current !== null) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const container = listRef.current;
+      if (!container) return;
+      const top = container.getBoundingClientRect().top;
+      let current: number | null = null;
+      for (const el of container.querySelectorAll<HTMLElement>("[data-seq]")) {
+        if (el.getBoundingClientRect().top - top <= 32) current = Number(el.dataset.seq);
+        else break;
+      }
+      setActiveSeq((prev) => (prev === current ? prev : current));
+    });
+  }, []);
+  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); }, []);
+
+  /** 点目录：把那条消息滚到视野顶部，并把高亮立刻置过去（不等滚动事件回填）。 */
+  function jumpToMessage(seq: number) {
+    setActiveSeq(seq);
+    listRef.current?.querySelector<HTMLElement>(`[data-seq="${seq}"]`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  /** 加成员：成功后刷新详情；失败直接抛给调用方（成员面板）展示。 */
   async function addMember(kind: "human" | "agent", mid: string) {
     await authedFetch(`/api/groups/${id}/members`, {
       method: "POST",
@@ -138,17 +175,24 @@ function GroupView({ id }: { id: string }) {
     }
   }
 
-  /** 桌面端右栏在视口内，直接滚过去；移动端右栏在浮层里，交给「详情」按钮。 */
-  function jumpToGoalPrompts() {
-    document.getElementById("goal-prompts")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  const nameOfAgent = useMemo(
+    () => (agentId: string) => detail?.members.find((m) => m.id === agentId)?.name ?? agentId.slice(0, 8),
+    [detail],
+  );
+  // 「全部复制」的纯文本形态：按 agent 分节，粘到新会话即可直接上岗
+  const allGoalPromptsText = useMemo(
+    () => (detail?.goalPrompts ?? []).map((gp) => `【${nameOfAgent(gp.agentId)}】\n${gp.content}`).join("\n\n"),
+    [detail, nameOfAgent],
+  );
 
   if (error) {
     return (
       <div className="h-full overflow-y-auto">
         <div className="mx-auto max-w-2xl px-6 py-16">
-          <p className="text-sm text-danger">{error}</p>
-          <Link href="/" className="btn-ghost mt-6 inline-block">← 返回</Link>
+          <p className="text-sm text-destructive">{error}</p>
+          <Button asChild variant="ghost" size="sm" className="mt-6">
+            <Link href="/"><ArrowLeft /> 返回</Link>
+          </Button>
         </div>
       </div>
     );
@@ -157,123 +201,125 @@ function GroupView({ id }: { id: string }) {
   if (!detail) {
     return (
       <div className="flex h-full items-center justify-center">
-        <Spinner label="加载群…" />
+        <Spinner className="size-5 text-muted-foreground" />
       </div>
     );
   }
 
   const { group, members, presence, goalPrompts, canDelete } = detail;
   const archived = group.status === "archived";
-  const nameOfAgent = (agentId: string) => members.find((m) => m.id === agentId)?.name ?? agentId.slice(0, 8);
-  // 「全部复制」的纯文本形态：按 agent 分节，粘到新会话即可直接上岗
-  const allGoalPromptsText = goalPrompts.map((gp) => `【${nameOfAgent(gp.agentId)}】\n${gp.content}`).join("\n\n");
-  // 桌面端右栏 vs 移动端全屏浮层，两处渲染同一份内容
-  const aside = (
-    <GroupAside
-      group={group}
-      members={members}
-      presence={presence}
-      goalPrompts={goalPrompts}
-      nameOfAgent={nameOfAgent}
-      allGoalPromptsText={allGoalPromptsText}
-      onAddMember={addMember}
-    />
-  );
+  const lastAt = messages.length > 0 ? messages[messages.length - 1].createdAt : null;
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* 任务简报条 */}
-      <header className="flex shrink-0 flex-wrap items-baseline gap-x-5 gap-y-1 border-b border-line px-6 py-4 lg:px-8">
-        <Link href="/" className="plate transition-colors hover:text-paper lg:hidden">←</Link>
-        <span className={`h-2 w-2 shrink-0 self-center rounded-full ${archived ? "bg-line" : "bg-signal live-dot"}`} />
-        <h1 className={`text-xl font-semibold tracking-tight ${archived ? "text-dim" : "text-paper"}`}>
+      {/* 任务简报条：状态 + 有多少消息 + 最新到什么时间；群级文书收进右侧三个入口 */}
+      <header className="flex min-h-(--app-header-height) shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2.5 lg:px-6">
+        <span
+          className={cn(
+            "size-2 shrink-0 rounded-full",
+            archived ? "bg-border" : "bg-presence-online live-dot",
+          )}
+        />
+        <h1 className={cn("text-lg font-semibold tracking-tight", archived ? "text-muted-foreground" : "text-foreground")}>
           {group.name}
         </h1>
         <span className="plate">
-          {archived ? "已归档" : "进行中"} · SEQ {String(group.seq).padStart(3, "0")} · V{group.profile.announcementVersion}
+          {archived ? "已归档" : "进行中"} · {group.seq} 条消息
+          {lastAt ? ` · 最新 ${relTime(lastAt)}` : ""}
         </span>
-        <div className="ml-auto flex items-center gap-2">
-          {goalPrompts.length > 0 && (
-            <button onClick={jumpToGoalPrompts} className="btn-ghost max-lg:hidden">
-              Goal Prompt ×{goalPrompts.length}
-            </button>
-          )}
-          {/* 移动端：右栏在这里看不见，非消息区内容收进全屏浮层 */}
-          <button onClick={() => setShowDetail(true)} className="btn-ghost lg:hidden">详情</button>
-          <button onClick={downloadExport} className="btn-ghost">导出</button>
+
+        <div className="ml-auto flex items-center gap-1.5">
+          {ENTRIES.map((entry) => (
+            <Button key={entry.key} variant="ghost" size="sm" onClick={() => setPanel(entry.key)}>
+              {entry.label}
+              {entry.key === "goalPrompts" && goalPrompts.length > 0 && (
+                <span className="coord text-text-tertiary">{goalPrompts.length}</span>
+              )}
+            </Button>
+          ))}
+          <Button variant="ghost" size="icon-sm" onClick={downloadExport} title="导出 Markdown" aria-label="导出 Markdown">
+            <Download />
+          </Button>
           {canDelete &&
             (confirmDelete ? (
               <>
-                <button onClick={removeGroup} disabled={deleting} className="btn-danger">
+                <Button variant="destructive" size="sm" onClick={removeGroup} disabled={deleting}>
                   {deleting ? "删除中…" : "确认删除"}
-                </button>
-                <button onClick={() => setConfirmDelete(false)} disabled={deleting} className="btn-ghost">
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
                   取消
-                </button>
+                </Button>
               </>
             ) : (
-              <button onClick={() => setConfirmDelete(true)} className="btn-danger">删除</button>
+              <Button variant="ghost" size="icon-sm" onClick={() => setConfirmDelete(true)} title="删除群" aria-label="删除群">
+                <Trash2 />
+              </Button>
             ))}
         </div>
       </header>
 
-      {/* 移动端单列（群详情已收进浮层），桌面端两栏 */}
-      <div className="flex min-h-0 flex-1 flex-col lg:grid lg:grid-cols-[1fr_320px] lg:overflow-hidden">
-        {/* 消息流：自管滚动，各断点都是它 */}
-        <section ref={listRef} className="min-w-0 flex-1 overflow-y-auto">
-          <ul className="mx-auto max-w-3xl space-y-1 px-6 py-5 lg:px-10">
+      {/* 消息区：自管滚动，各断点都是它 */}
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden lg:grid lg:grid-cols-[13rem_minmax(0,1fr)_16rem]">
+        {/* 左栏：目录（窄屏收起，靠中栏顺序阅读） */}
+        <aside className="hidden min-h-0 border-r border-border lg:block">
+          <MessageOutline messages={messages} members={members} activeSeq={activeSeq} onJump={jumpToMessage} />
+        </aside>
+
+        <section ref={listRef} onScroll={syncActiveOnScroll} className="min-h-0 flex-1 overflow-y-auto">
+          <ul className="mx-auto max-w-3xl space-y-1 px-6 py-5 lg:px-8">
             {messages.map((m) =>
               m.type === "system" ? (
-                <li key={m.id} className="flex items-baseline gap-4 py-2.5 text-[13px] text-dim">
-                  <span className="coord w-14 shrink-0 text-right text-[11px] text-faint">#{String(m.seq).padStart(3, "0")}</span>
-                  <span className="border-l-2 border-dashed border-line pl-4">{m.body}</span>
+                <li key={m.id} data-seq={m.seq} className="flex items-baseline gap-4 py-2.5 text-[13px] text-muted-foreground">
+                  <span className="coord w-14 shrink-0 text-right text-[11px] text-text-tertiary">#{String(m.seq).padStart(3, "0")}</span>
+                  <span className="border-l-2 border-dashed border-border pl-4">{m.body}</span>
                 </li>
               ) : (
-                <li key={m.id} className="flex gap-4 rounded-lg py-3 transition-colors hover:bg-panel-2">
-                  <span className="coord w-14 shrink-0 pt-0.5 text-right text-[11px] text-dim">
+                <li key={m.id} data-seq={m.seq} className="flex gap-4 rounded-lg py-3 transition-colors hover:bg-row-hover">
+                  <span className="coord w-14 shrink-0 pt-0.5 text-right text-[11px] text-muted-foreground">
                     #{String(m.seq).padStart(3, "0")}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-baseline gap-x-3">
-                      <span className="text-sm font-medium text-paper">{nameOf(m.from, members)}</span>
+                      <span className="text-sm font-medium text-foreground">{messageAuthorName(m.from, members)}</span>
                       {m.to !== "all" && (
-                        <span className="coord text-[11px] text-dim">→ {m.to.slice(0, 8)}</span>
+                        <span className="coord text-[11px] text-muted-foreground">→ {m.to.slice(0, 8)}</span>
                       )}
                       {m.refs.length > 0 && (
-                        <span className="coord text-[11px] font-medium text-amber">↩#{m.refs.join(" #")}</span>
+                        <span className="coord text-[11px] font-medium text-notice">↩#{m.refs.join(" #")}</span>
                       )}
-                      <span className="coord ml-auto text-[11px] text-faint">{timeStr(m.createdAt)}</span>
+                      <span className="coord ml-auto text-[11px] text-text-tertiary">{hhmmss(m.createdAt)}</span>
                     </div>
-                    <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-paper/90">{m.body}</p>
+                    <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{m.body}</p>
                     {m.evidence.length > 0 && <EvidenceList evidence={m.evidence} />}
                   </div>
                 </li>
               ),
             )}
             {messages.length === 0 && (
-              <li className="py-12 text-center text-sm text-dim">
+              <li className="py-12 text-center text-sm text-muted-foreground">
                 还没有消息。让 agent 说第一句：<code className="coord text-xs">wings send &ldquo;…&rdquo;</code>
               </li>
             )}
           </ul>
         </section>
 
-        {/* 控制面板：桌面端右栏（移动端走下面的全屏浮层） */}
-        <aside className="hidden border-line lg:block lg:overflow-y-auto lg:border-l lg:px-6 lg:py-6">
-          {aside}
+        {/* 右栏：只放目标 */}
+        <aside className="hidden min-h-0 border-l border-border lg:block">
+          <GoalsPanel profile={group.profile} />
         </aside>
       </div>
 
-      {/* 移动端：非消息区内容（Goal Prompt / 目标 / 公告 / 背景 / 成员）全屏展示 */}
-      {showDetail && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-canvas lg:hidden">
-          <div className="flex h-16 shrink-0 items-center justify-between border-b border-line px-6">
-            <span className="plate">任务详情</span>
-            <button onClick={() => setShowDetail(false)} className="btn-ghost">关闭</button>
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-6">{aside}</div>
-        </div>
-      )}
+      <DetailSheet
+        panel={panel}
+        onClose={() => setPanel(null)}
+        group={group}
+        members={members}
+        presence={presence}
+        goalPrompts={goalPrompts}
+        nameOfAgent={nameOfAgent}
+        allGoalPromptsText={allGoalPromptsText}
+        onAddMember={addMember}
+      />
     </div>
   );
 }
@@ -286,12 +332,12 @@ function EvidenceList({ evidence }: { evidence: Evidence[] }) {
         <div key={e.name} className="text-xs">
           <button
             onClick={() => setOpen(open === e.name ? null : e.name)}
-            className="coord text-dim transition-colors hover:text-amber"
+            className="coord text-muted-foreground transition-colors hover:text-notice"
           >
             📎 {e.name}
           </button>
           {open === e.name && e.content && (
-            <pre className="mt-1.5 max-h-60 overflow-auto rounded-lg border border-line bg-panel p-3 text-xs text-paper/80">
+            <pre className="mt-1.5 max-h-60 overflow-auto rounded-lg border border-border bg-card p-3 text-xs text-foreground/80">
               {e.content}
             </pre>
           )}
