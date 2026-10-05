@@ -1,6 +1,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 import {
   db,
+  AGENTS_COLLECTION,
   GROUPS_COLLECTION,
   membersCol,
   messagesCol,
@@ -229,6 +230,34 @@ export async function closeGroup(groupId: string, principal: Principal): Promise
   if (snap.get("status") === "archived") return;
   await groupRef.update({ status: "archived", closedBy: principal.id, closedAt: Date.now() });
   await appendSystemMessage(groupId, `群已由 ${principal.kind}:${principal.id} 收工归档。消息流冻结为只读。`);
+}
+
+/**
+ * 能否删除：必须是人的凭据，且是建群者本人、或建群 agent 的主人。
+ * 人删自己 agent 建的群要过一层 agents 查询——建群记录里存的是 agentId，不是人的 uid。
+ */
+export async function canDeleteGroup(createdBy: string, principal: Principal): Promise<boolean> {
+  if (principal.kind !== "human") return false;
+  if (createdBy === principal.id) return true;
+  const agentSnap = await db.collection(AGENTS_COLLECTION).doc(createdBy).get();
+  return agentSnap.exists && agentSnap.get("ownerId") === principal.id;
+}
+
+/**
+ * 删除群：硬删（与 close 的软终态相区分），不可逆，所以收紧到「人」来做。
+ * agent 不该能销毁共享的任务容器——它的终态动作到 close 为止。
+ */
+export async function deleteGroup(groupId: string, principal: Principal): Promise<void> {
+  const groupRef = db.collection(GROUPS_COLLECTION).doc(groupId);
+  const snap = await groupRef.get();
+  if (!snap.exists) throw new HttpError(404, "not-found", "群不存在");
+  if (principal.kind !== "human") {
+    throw new HttpError(403, "human-only", "删除群只能由人在观察台里做");
+  }
+  if (!(await canDeleteGroup(snap.get("createdBy"), principal))) {
+    throw new HttpError(403, "not-owner", "只有群主可以删除该群");
+  }
+  await db.recursiveDelete(groupRef);
 }
 
 export { sha256, goalPromptsCol, FieldValue };
