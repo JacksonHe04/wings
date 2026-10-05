@@ -10,6 +10,7 @@ import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useUser } from "@/lib/use-user";
+import { Spinner } from "./spinner";
 
 export interface GroupSummary {
   id: string;
@@ -25,6 +26,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [groups, setGroups] = useState<GroupSummary[]>([]);
+  const [groupsLoading, setGroupsLoading] = useState(true);
 
   const authedFetch = useCallback(
     async (path: string, init?: RequestInit) => {
@@ -44,11 +46,13 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
 
+  // 群导航随路由刷新（建群 / 删群后回来要准）；loading 只在首屏为真，切页时不闪
   useEffect(() => {
     if (!user) return;
     authedFetch("/api/groups")
       .then((d: { groups: GroupSummary[] }) => setGroups(d.groups))
-      .catch(() => undefined);
+      .catch(() => undefined)
+      .finally(() => setGroupsLoading(false));
   }, [user, pathname, authedFetch]);
 
   if (loading || !user) {
@@ -68,12 +72,20 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 overflow-y-auto p-2">
           <p className="plate px-2 pb-1.5 pt-2">群 · 任务</p>
           <ul>
-            {active.map((g) => (
-              <GroupRow key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
-            ))}
-            {active.length === 0 && <li className="px-2 py-3 text-xs text-faint">还没有进行中的群</li>}
+            {groupsLoading && (
+              <li className="px-2 py-3">
+                <Spinner label="加载中" />
+              </li>
+            )}
+            {!groupsLoading &&
+              active.map((g) => (
+                <GroupRow key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
+              ))}
+            {!groupsLoading && active.length === 0 && (
+              <li className="px-2 py-3 text-xs text-faint">还没有进行中的群</li>
+            )}
           </ul>
-          {archived.length > 0 && (
+          {!groupsLoading && archived.length > 0 && (
             <>
               <p className="plate px-2 pb-1.5 pt-4">已归档 · {archived.length}</p>
               <ul>
