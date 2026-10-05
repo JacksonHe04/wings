@@ -55,7 +55,7 @@ export async function POST(
         const user = await auth.getUserByEmail(body.id);
         memberId = user.uid;
         memberName = user.displayName ?? user.email ?? "human";
-        await ensureUserDoc(memberId, user.email ?? undefined);
+        await ensureUserDoc(memberId, { email: user.email ?? undefined, displayName: memberName });
       } catch {
         throw new HttpError(404, "not-found", `找不到用户 ${body.id}（该邮箱还没有账号）`);
       }

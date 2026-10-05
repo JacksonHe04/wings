@@ -52,6 +52,8 @@ export const auth = lazy(() => getAuth(app()));
 export const AGENTS_COLLECTION = "agents";
 export const USERS_COLLECTION = "users";
 export const GROUPS_COLLECTION = "groups";
+/** 外部身份 → wings uid 的映射（见 lib/server/identity.ts）。 */
+export const IDENTITIES_COLLECTION = "identities";
 export function membersCol(groupId: string) {
   return db.collection(GROUPS_COLLECTION).doc(groupId).collection("members");
 }
