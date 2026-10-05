@@ -1,7 +1,5 @@
 @import "tailwindcss";
 @import "tw-animate-css";
-@import "@fontsource-variable/geist";
-@import "@fontsource-variable/geist-mono";
 
 /*
  * wings 观察台 — 与 fde-anything Studio **共用同一套语义令牌**。
@@ -107,8 +105,10 @@
 
 @theme inline {
 	--font-heading: var(--font-sans);
-	--font-sans: "Geist Variable", sans-serif;
-	--font-mono: "Geist Mono Variable", ui-monospace, monospace;
+	/* Geist 由 next/font 在 app/layout.tsx 里自托管，这里只指过去。
+	   （fde-anything 是 Vite，用 @fontsource 引入；取到的字面是同一个。） */
+	--font-sans: var(--font-geist-sans), sans-serif;
+	--font-mono: var(--font-geist-mono), ui-monospace, monospace;
 	--color-canvas: var(--bg); /* → bg-canvas（应用底；卡片浮在它上面） */
 	/* 菜单项内缩与圆角挂钩：角越圆，文字边缘吃掉的横向空间越多，内边距得跟着长。 */
 	--spacing-menu-item: calc(var(--radius) * 0.625);
