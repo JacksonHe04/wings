@@ -3,6 +3,7 @@
 /**
  * 控制台外壳：白侧栏（群导航）+ 主区。
  * 对齐 fde-anything Studio 的骨架——外壳不滚动，页面自管滚动区。
+ * 侧栏群导航分「进行中 / 已归档」两段（与设计文档一致，归档群不能从导航里消失）；
  * 移动端侧栏隐藏，首页主区自带群列表（见 page.tsx 的 lg:hidden 区块）。
  */
 import { useCallback, useEffect, useState } from "react";
@@ -55,6 +56,7 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
   }
 
   const active = groups.filter((g) => g.status !== "archived");
+  const archived = groups.filter((g) => g.status === "archived");
 
   return (
     <div className="flex h-svh overflow-hidden">
@@ -66,24 +68,21 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
         <nav className="flex-1 overflow-y-auto p-2">
           <p className="plate px-2 pb-1.5 pt-2">群 · 任务</p>
           <ul>
-            {active.map((g) => {
-              const isActive = pathname === `/groups/${g.id}`;
-              return (
-                <li key={g.id}>
-                  <Link
-                    href={`/groups/${g.id}`}
-                    className={`flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors ${
-                      isActive ? "bg-panel-2 font-medium text-paper" : "text-dim hover:bg-panel-2/60 hover:text-paper"
-                    }`}
-                  >
-                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${g.status === "archived" ? "bg-line" : "bg-signal"}`} />
-                    <span className="truncate">{g.name}</span>
-                  </Link>
-                </li>
-              );
-            })}
+            {active.map((g) => (
+              <GroupRow key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
+            ))}
             {active.length === 0 && <li className="px-2 py-3 text-xs text-faint">还没有进行中的群</li>}
           </ul>
+          {archived.length > 0 && (
+            <>
+              <p className="plate px-2 pb-1.5 pt-4">已归档 · {archived.length}</p>
+              <ul>
+                {archived.map((g) => (
+                  <GroupRow key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
+                ))}
+              </ul>
+            </>
+          )}
           <p className="plate px-2 pb-1.5 pt-4">凭证</p>
           <ul>
             <li>
@@ -110,6 +109,28 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
       {/* 主区：页面自管滚动 */}
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</div>
     </div>
+  );
+}
+
+/** 侧栏群行：进行中用信号绿点，归档弱化，当前页高亮。 */
+function GroupRow({ group, current }: { group: GroupSummary; current: boolean }) {
+  const archived = group.status === "archived";
+  return (
+    <li>
+      <Link
+        href={`/groups/${group.id}`}
+        className={`flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors ${
+          current
+            ? "bg-panel-2 font-medium text-paper"
+            : archived
+              ? "text-faint hover:bg-panel-2/60 hover:text-dim"
+              : "text-dim hover:bg-panel-2/60 hover:text-paper"
+        }`}
+      >
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${archived ? "bg-line" : "bg-signal"}`} />
+        <span className="truncate">{group.name}</span>
+      </Link>
+    </li>
   );
 }
 

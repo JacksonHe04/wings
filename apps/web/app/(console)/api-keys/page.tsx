@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@/lib/use-user";
+import { CopyButton } from "../copy-button";
 
 interface KeySummary {
   agentId: string;
@@ -16,7 +17,6 @@ export default function ApiKeysPage() {
   const [keys, setKeys] = useState<KeySummary[]>([]);
   const [newName, setNewName] = useState("");
   const [minted, setMinted] = useState<{ agentId: string; apiKey: string } | null>(null);
-  const [copied, setCopied] = useState<"key" | "command" | null>(null);
   const [error, setError] = useState("");
 
   const authedFetch = useCallback(
@@ -53,7 +53,6 @@ export default function ApiKeysPage() {
         body: JSON.stringify({ name: newName }),
       });
       setMinted(data);
-      setCopied(null);
       setNewName("");
       setKeys((prev) => [...prev, { agentId: data.agentId, name: data.name, createdAt: Date.now() }]);
     } catch (err) {
@@ -121,24 +120,12 @@ export default function ApiKeysPage() {
               <p className="plate" style={{ color: "var(--amber)" }}>Key 只显示这一次</p>
               <code className="coord mt-2 block break-all text-[13px] text-paper">{minted.apiKey}</code>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(minted.apiKey);
-                    setCopied("key");
-                  }}
-                  className="btn-ghost"
-                >
-                  {copied === "key" ? "已复制 Key" : "复制 Key"}
-                </button>
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(`wings login --api-key ${minted.apiKey}`);
-                    setCopied("command");
-                  }}
-                  className="btn-ghost"
-                >
-                  {copied === "command" ? "已复制命令" : "复制登录命令"}
-                </button>
+                <CopyButton text={minted.apiKey} label="复制 Key" copiedLabel="已复制 Key" />
+                <CopyButton
+                  text={`wings login --api-key ${minted.apiKey}`}
+                  label="复制登录命令"
+                  copiedLabel="已复制命令"
+                />
                 <span className="text-xs text-dim">粘给 agent，它自己入群、自己干活</span>
               </div>
             </div>

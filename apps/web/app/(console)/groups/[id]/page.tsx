@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { useUser } from "@/lib/use-user";
 import { clientDb } from "@/lib/firebase";
+import { CopyButton } from "../../copy-button";
 import type { Evidence, Message, Presence } from "@/lib/types";
 
 interface Detail {
@@ -25,6 +26,7 @@ interface Detail {
   members: Array<{ id: string; kind: string; name: string; role: string }>;
   presence: Array<Presence>;
   goalPrompts: Array<{ agentId: string; content: string; version: number; updatedBy: string }>;
+  canDelete: boolean;
 }
 
 function timeStr(ts: number): string {
@@ -49,6 +51,8 @@ export default function GroupPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [addEmail, setAddEmail] = useState("");
   const [addMsg, setAddMsg] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const authedFetch = useCallback(
     async (path: string, init?: RequestInit) => {
@@ -80,8 +84,9 @@ export default function GroupPage() {
     if (!user || !id) return;
     const q = query(collection(clientDb, "groups", id, "messages"), orderBy("seq"));
     return onSnapshot(
+      // 文档 id 不在 data() 里，得显式补上——否则列表 key 全是 undefined
       q,
-      (snap) => setMessages(snap.docs.map((d) => d.data() as Message)),
+      (snap) => setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Message)),
       (err) => setError(err.message),
     );
   }, [user, id]);
@@ -117,6 +122,24 @@ export default function GroupPage() {
     URL.revokeObjectURL(url);
   }
 
+  /** 删除群：硬删不可逆，owner-only（按钮按 canDelete 显示），二次确认后才真正调用。 */
+  async function removeGroup() {
+    setDeleting(true);
+    try {
+      await authedFetch(`/api/groups/${id}`, { method: "DELETE" });
+      router.replace("/");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "删除失败");
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
+  }
+
+  /** 右栏 Goal Prompt 在移动端落在消息流下方，用跳转按钮兜住「找不到」。 */
+  function jumpToGoalPrompts() {
+    document.getElementById("goal-prompts")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   if (error) {
     return (
       <div className="h-full overflow-y-auto">
@@ -132,9 +155,15 @@ export default function GroupPage() {
     return <div className="h-full" />;
   }
 
-  const { group, members, presence, goalPrompts } = detail;
+  const { group, members, presence, goalPrompts, canDelete } = detail;
   const doneGoals = group.profile.goals.filter((g) => g.status === "done").length;
   const archived = group.status === "archived";
+  const nameOfAgent = (agentId: string) =>
+    members.find((m) => m.id === agentId)?.name ?? agentId.slice(0, 8);
+  // 「全部复制」的纯文本形态：按 agent 分节，粘到新会话即可直接上岗
+  const allGoalPromptsText = goalPrompts
+    .map((gp) => `【${nameOfAgent(gp.agentId)}】\n${gp.content}`)
+    .join("\n\n");
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -148,7 +177,27 @@ export default function GroupPage() {
         <span className="plate">
           {archived ? "已归档" : "进行中"} · SEQ {String(group.seq).padStart(3, "0")} · V{group.profile.announcementVersion}
         </span>
-        <button onClick={downloadExport} className="btn-ghost ml-auto">导出</button>
+        <div className="ml-auto flex items-center gap-2">
+          {goalPrompts.length > 0 && (
+            <button onClick={jumpToGoalPrompts} className="btn-ghost">
+              Goal Prompt ×{goalPrompts.length}
+            </button>
+          )}
+          <button onClick={downloadExport} className="btn-ghost">导出</button>
+          {canDelete &&
+            (confirmDelete ? (
+              <>
+                <button onClick={removeGroup} disabled={deleting} className="btn-danger">
+                  {deleting ? "删除中…" : "确认删除"}
+                </button>
+                <button onClick={() => setConfirmDelete(false)} disabled={deleting} className="btn-ghost">
+                  取消
+                </button>
+              </>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} className="btn-danger">删除</button>
+            ))}
+        </div>
       </header>
 
       <div className="grid min-h-0 flex-1 max-lg:overflow-y-auto lg:grid-cols-[1fr_320px] lg:overflow-hidden">
@@ -185,7 +234,7 @@ export default function GroupPage() {
             )}
             {messages.length === 0 && (
               <li className="py-12 text-center text-sm text-dim">
-                还没有消息。让 agent 说第一句：<code className="coord text-xs">wings send "…"</code>
+                还没有消息。让 agent 说第一句：<code className="coord text-xs">wings send &ldquo;…&rdquo;</code>
               </li>
             )}
           </ul>
@@ -193,6 +242,32 @@ export default function GroupPage() {
 
         {/* 控制面板：桌面端独立滚动 */}
         <aside className="space-y-8 border-line px-6 py-6 lg:overflow-y-auto lg:border-l lg:px-6">
+          {/* Goal Prompt 是 agent 上岗的第一读物，放右栏最前，默认展开并可一键复制 */}
+          {goalPrompts.length > 0 && (
+            <section id="goal-prompts" className="scroll-mt-4">
+              <div className="mb-2 flex items-center justify-between gap-2 border-b border-line pb-2">
+                <h3 className="plate">Goal Prompts · {goalPrompts.length}</h3>
+                <CopyButton text={allGoalPromptsText} label="全部复制" className="btn-ghost" />
+              </div>
+              <div className="space-y-2">
+                {goalPrompts.map((gp) => (
+                  <details key={gp.agentId} open className="rounded-lg border border-line bg-panel">
+                    <summary className="flex cursor-pointer items-center gap-2 px-3 py-2.5 text-[13px] text-paper/80">
+                      <span className="min-w-0 flex-1 truncate">
+                        {nameOfAgent(gp.agentId)}
+                        <span className="coord ml-2 text-[11px] text-dim">v{gp.version}</span>
+                      </span>
+                      <CopyButton text={gp.content} label="复制" />
+                    </summary>
+                    <pre className="whitespace-pre-wrap border-t border-line px-3 py-2.5 text-xs leading-relaxed text-dim">
+                      {gp.content}
+                    </pre>
+                  </details>
+                ))}
+              </div>
+            </section>
+          )}
+
           <section>
             <h3 className="plate mb-2 border-b border-line pb-2">目标 · {doneGoals}/{group.profile.goals.length}</h3>
             <ul className="space-y-2">
@@ -285,23 +360,6 @@ export default function GroupPage() {
               </div>
             )}
           </section>
-
-          {goalPrompts.length > 0 && (
-            <section>
-              <h3 className="plate mb-2 border-b border-line pb-2">Goal Prompts</h3>
-              <div className="space-y-2">
-                {goalPrompts.map((gp) => (
-                  <details key={gp.agentId} className="rounded-lg border border-line bg-panel">
-                    <summary className="cursor-pointer px-3 py-2.5 text-[13px] text-paper/80">
-                      {members.find((m) => m.id === gp.agentId)?.name ?? gp.agentId.slice(0, 8)}
-                      <span className="coord ml-2 text-[11px] text-dim">v{gp.version}</span>
-                    </summary>
-                    <pre className="whitespace-pre-wrap px-3 pb-3 text-xs leading-relaxed text-dim">{gp.content}</pre>
-                  </details>
-                ))}
-              </div>
-            </section>
-          )}
         </aside>
       </div>
     </div>
