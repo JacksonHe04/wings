@@ -1,46 +1,41 @@
 "use client";
 
+/**
+ * 登录 = 粘贴一把 API Key。
+ *
+ * API Key 就是账号凭据：拿它向 /api/auth/session 换一个 Firebase 自定义令牌并登入，
+ * 之后浏览器持有的是正常登录态（刷新不掉线），与邮箱密码登录没有任何区别——
+ * 只是少了注册那一步，身份本来就由 Key 决定。
+ */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  updateProfile,
-} from "firebase/auth";
+import { signInWithCustomToken } from "firebase/auth";
 import { clientAuth } from "@/lib/firebase";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    const key = apiKey.trim();
+    if (!key) return;
     setBusy(true);
     setError("");
     try {
-      if (mode === "signup") {
-        const cred = await createUserWithEmailAndPassword(clientAuth, email, password);
-        if (displayName) await updateProfile(cred.user, { displayName });
-      } else {
-        await signInWithEmailAndPassword(clientAuth, email, password);
-      }
+      const res = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: key }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? "登录失败");
+      await signInWithCustomToken(clientAuth, data.token);
       router.replace("/");
     } catch (err) {
-      const code = (err as { code?: string })?.code ?? "";
-      setError(
-        code.includes("invalid-credential") || code.includes("wrong-password")
-          ? "邮箱或密码不对"
-          : code.includes("email-already-in-use")
-            ? "这个邮箱已经注册过，去登录"
-            : code.includes("weak-password")
-              ? "密码至少 6 位"
-              : "登录失败，稍后再试",
-      );
+      setError(err instanceof Error ? err.message : "登录失败，稍后再试");
     } finally {
       setBusy(false);
     }
@@ -55,49 +50,29 @@ export default function LoginPage() {
         </div>
 
         <div className="space-y-3 rounded-2xl border border-line bg-panel p-8 shadow-sm">
-          {mode === "signup" && (
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="昵称"
-              className="field"
-            />
-          )}
+          <label htmlFor="api-key" className="plate block">
+            API Key
+          </label>
           <input
-            type="email"
+            id="api-key"
             required
-            autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="邮箱"
-            className="field"
-          />
-          <input
-            type="password"
-            required
-            minLength={6}
-            autoComplete={mode === "signup" ? "new-password" : "current-password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="密码（≥6 位）"
-            className="field"
+            autoFocus
+            autoComplete="off"
+            spellCheck={false}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="wtk_…"
+            className="field coord text-[13px]"
           />
           {error && <p className="text-sm text-danger">{error}</p>}
           <button disabled={busy} className="btn-primary w-full">
-            {mode === "signin" ? "登 录" : "注 册"}
+            {busy ? "验证中…" : "登 录"}
           </button>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setMode(mode === "signin" ? "signup" : "signin");
-            setError("");
-          }}
-          className="mt-6 w-full text-center text-sm text-dim transition-colors hover:text-paper"
-        >
-          {mode === "signin" ? "没有账号？注册一个" : "已有账号？去登录"}
-        </button>
+        <p className="mt-6 text-center text-xs leading-relaxed text-dim">
+          Key 由群主分配，形如 <code className="coord">wtk_</code> 开头。
+        </p>
       </form>
     </main>
   );

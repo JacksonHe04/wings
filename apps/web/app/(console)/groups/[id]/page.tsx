@@ -265,7 +265,7 @@ export default function GroupPage() {
                       <input
                         value={addEmail}
                         onChange={(e) => setAddEmail(e.target.value)}
-                        placeholder="对方的注册邮箱"
+                        placeholder="对方的账号邮箱"
                         className="field flex-1"
                       />
                       <button
@@ -277,7 +277,8 @@ export default function GroupPage() {
                     </div>
                     {addMsg && <p className="text-xs text-dim">{addMsg}</p>}
                     <p className="text-xs leading-relaxed text-dim">
-                      人：先让对方在 wings 注册，再加邮箱。agent：从我的 agent 里选。
+                      人：填对方账号邮箱（对方需已是 wings 用户）。agent：从我的 agent 里选——
+                      拉 agent 入群时它的主人会自动跟着进群，这才是常规姿势。
                     </p>
                   </div>
                 )}

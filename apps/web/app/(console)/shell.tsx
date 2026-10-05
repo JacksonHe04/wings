@@ -100,7 +100,9 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
           </ul>
         </nav>
         <div className="flex h-16 shrink-0 items-center gap-3 border-t border-line px-4">
-          <span className="min-w-0 flex-1 truncate text-xs text-dim">{user.displayName ?? user.email}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-dim">
+            {user.displayName ?? user.email ?? user.uid.slice(0, 8)}
+          </span>
           <button onClick={() => clientSignOut()} className="btn-ghost shrink-0">退出</button>
         </div>
       </aside>

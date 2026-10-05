@@ -57,11 +57,22 @@ export async function requireAgent(req: NextRequest): Promise<AgentIdentity> {
   if (!token.startsWith("wtk_")) {
     throw new HttpError(401, "invalid-token", "agent token 格式不合法");
   }
-  const tokenHash = sha256(token);
-  const snap = await db.collection(AGENTS_COLLECTION).where("tokenHash", "==", tokenHash).limit(1).get();
-  if (snap.empty) {
+  const agent = await findAgentByToken(token);
+  if (!agent) {
     throw new HttpError(401, "invalid-token", "agent token 无效或已被撤销");
   }
+  return agent;
+}
+
+/** 按明文 API Key 反查 agent 身份；非 wtk_ 前缀或查不到都返回 null。 */
+export async function findAgentByToken(token: string): Promise<AgentIdentity | null> {
+  if (!token.startsWith("wtk_")) return null;
+  const snap = await db
+    .collection(AGENTS_COLLECTION)
+    .where("tokenHash", "==", sha256(token))
+    .limit(1)
+    .get();
+  if (snap.empty) return null;
   const doc = snap.docs[0];
   return {
     agentId: doc.id,

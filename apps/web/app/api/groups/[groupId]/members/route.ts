@@ -57,7 +57,7 @@ export async function POST(
         memberName = user.displayName ?? user.email ?? "human";
         await ensureUserDoc(memberId, user.email ?? undefined);
       } catch {
-        throw new HttpError(404, "not-found", `找不到用户 ${body.id}（对方需先在 Web 注册）`);
+        throw new HttpError(404, "not-found", `找不到用户 ${body.id}（该邮箱还没有账号）`);
       }
     }
 
