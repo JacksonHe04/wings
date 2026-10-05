@@ -222,6 +222,19 @@ const afterClose = await api(`/api/groups/${groupId}/messages`, {
 });
 check("归档后写入被拒（409 archived）", afterClose.status === 409 && afterClose.data?.error === "archived");
 
+// 9b. 取消归档：拉回进行中，消息流解冻（误归档的补救）
+console.log("[9b] 取消归档");
+await api(`/api/groups/${groupId}/reopen`, { method: "POST", token: tokenA });
+const reopened = await api(`/api/groups/${groupId}`, { token: tokenA });
+check("取消归档后 status=active", reopened.data?.group?.status === "active");
+check("closedBy / closedAt 已清除", !reopened.data?.group?.closedBy && !reopened.data?.group?.closedAt);
+const afterReopen = await api(`/api/groups/${groupId}/messages`, {
+  method: "POST", token: tokenA, body: { body: "解冻后又能说话了" },
+});
+check("取消归档后写入恢复", afterReopen.ok);
+// 复归归档态，让后续用例（导出 / 删除）的隐含前提不变
+await api(`/api/groups/${groupId}/close`, { method: "POST", token: tokenA });
+
 // 10. Markdown 导出
 console.log("[10] 导出交付物");
 const exportPath = join(tmp, "export.md");
