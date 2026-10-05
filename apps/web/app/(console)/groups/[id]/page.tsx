@@ -49,6 +49,7 @@ function GroupView({ id }: { id: string }) {
   const [panel, setPanel] = useState<DetailPanel | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   /** 目录里高亮到哪一条：由滚动位置驱动，点目录也会立刻置上 */
   const [activeSeq, setActiveSeq] = useState<number | null>(null);
   // 消息区滚动落底：首次进入要停在最新消息处
@@ -162,6 +163,19 @@ function GroupView({ id }: { id: string }) {
     URL.revokeObjectURL(url);
   }
 
+  /** 收工归档：不可逆地把群推向终态（消息流冻结只读），因此是删除的**前置**。 */
+  async function archiveGroup() {
+    setArchiving(true);
+    try {
+      await authedFetch(`/api/groups/${id}/close`, { method: "POST" });
+      setDetail(await authedFetch(`/api/groups/${id}`));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "归档失败");
+    } finally {
+      setArchiving(false);
+    }
+  }
+
   /** 删除群：硬删不可逆，owner-only（按钮按 canDelete 显示），二次确认后才真正调用。 */
   async function removeGroup() {
     setDeleting(true);
@@ -240,7 +254,14 @@ function GroupView({ id }: { id: string }) {
           <Button variant="ghost" size="icon-sm" onClick={downloadExport} title="导出 Markdown" aria-label="导出 Markdown">
             <Download />
           </Button>
-          {canDelete &&
+          {/* 先归档再删除：没收工的群只给归档，归档之后才谈得上删（Jackson 裁定 261005） */}
+          {!archived && (
+            <Button variant="ghost" size="sm" onClick={archiveGroup} disabled={archiving}>
+              {archiving ? "归档中…" : "归档"}
+            </Button>
+          )}
+          {archived &&
+            canDelete &&
             (confirmDelete ? (
               <>
                 <Button variant="destructive" size="sm" onClick={removeGroup} disabled={deleting}>
