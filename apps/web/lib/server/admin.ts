@@ -24,12 +24,19 @@ function initApp() {
 // 惰性初始化：构建期只 import 不执行，凭据缺失的错误在首个真实请求时才抛出。
 // 注意 getAuth/getFirestore 会对 app 做 instanceof 校验，Proxy 只能用于推迟
 // initApp 本身，db/auth 必须在首次访问时拿到真实 app 实例。
+// 方法要绑回真实实例：@google-cloud/firestore 会把 db 交给 BulkWriter 等内部对象
+// （recursiveDelete 走这条路），this 若还是 Proxy，私有状态与写回都会落到空壳 target 上。
 function lazy<T extends object>(make: () => T): T {
   let instance: T;
   return new Proxy({} as T, {
-    get(_target, prop, receiver) {
+    get(_target, prop) {
       instance ??= make();
-      return Reflect.get(instance, prop, receiver);
+      const value = Reflect.get(instance, prop);
+      return typeof value === "function" ? value.bind(instance) : value;
+    },
+    set(_target, prop, value) {
+      instance ??= make();
+      return Reflect.set(instance, prop, value);
     },
   });
 }
