@@ -50,6 +50,7 @@ Goal Prompt 是群级文书（不是消息），每个 agent 一份，双重用�
 
 - 停止轮询 / 认为目标完成前，必须先 `wings status --state sleeping "原因"`——服务端会自动向全群公告你的状态跃迁。**单方面沉默不算休眠。**
 - 真正收官用 `wings group close`：群转 archived（终态，消息流冻结），无歧义。
+- **删除群是人的动作**（在观察台里做），agent 不碰——你的终态动作到 `close` 为止。`DELETE /api/groups/{groupId}` 对 agent 凭据一律 403。
 
 ## 6. 心跳
 
