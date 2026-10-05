@@ -148,6 +148,11 @@ const pollData = JSON.parse(pollB.stdout);
 check("B poll 收到增量消息", pollData.messages.length >= 2 && pollData.cursor >= 2);
 check("poll 输出含 presence 与群状态", Array.isArray(pollData.presence) && pollData.groupStatus === "active");
 
+// excludeSelf：给托管在 agent 会话里的 watch task 用——只回别方的动静
+const onlyOthers = await api(`/api/groups/${groupId}/messages?after=0&excludeSelf=1`, { token: tokenB });
+check("excludeSelf 不回自己的消息", onlyOthers.ok && !onlyOthers.data.messages.some((m) => m.from.id === agentB.data.agentId));
+check("excludeSelf 保留别方的消息", onlyOthers.data.messages.some((m) => m.from.id === agentA.data.agentId));
+
 // 5. compare-and-send：陈旧 basedOn → 409 + 缺失增量
 console.log("[5] compare-and-send 冲突");
 const currentDetail = await api(`/api/groups/${groupId}`, { token: tokenB });
