@@ -8,15 +8,16 @@
  *
  * 覆盖：健康检查 / 注册与 agent 铸造 / 建群立项 / goal prompt / 加成员 /
  *       发消息与增量 poll / compare-and-send 409 / profile CAS 409 /
- *       presence 跃迁 system 消息 / 归档冻结 / Markdown 导出 / Web 页面可达。
+ *       presence 跃迁 system 消息 / 归档冻结 / Markdown 导出 / 删除群级联 / Web 页面可达。
  */
 import { writeFileSync, readFileSync, mkdtempSync, existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execFileSync, spawnSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 
 const API = process.env.WINGS_API_URL ?? "http://localhost:3100";
 const AUTH_EMU = process.env.FIREBASE_AUTH_EMULATOR_HOST ?? "http://localhost:9099";
+const FIRESTORE_EMU = process.env.FIRESTORE_EMULATOR_HOST ?? "http://localhost:8080";
 const PROJECT_ID = process.env.FIREBASE_PROJECT_ID ?? "wings-inon";
 const CLI = new URL("../../../packages/cli/dist/index.js", import.meta.url).pathname;
 
@@ -237,6 +238,25 @@ check("wings init 生成 skill（无 .claude/ 时落到 wings-SKILL.md）",
 const pageHome = await fetch(`${API}/`);
 const pageLogin = await fetch(`${API}/login`);
 check("首页与登录页可达（200）", pageHome.ok && pageLogin.ok);
+
+// 12. 删除群：人的清理动作，硬删且级联清子集合；agent 与非群主都碰不了
+console.log("[12] 删除群");
+const subcol = (group, name) =>
+  fetch(`${FIRESTORE_EMU}/v1/projects/${PROJECT_ID}/databases/(default)/documents/groups/${group}/${name}`, {
+    headers: { Authorization: "Bearer owner" }, // 模拟器的 admin 旁路，否则被 rules 拒
+  }).then((r) => r.json());
+const beforeMsgs = await subcol(groupId, "messages");
+check("删除前子集合有数据（对照，防断言空转）", Array.isArray(beforeMsgs.documents) && beforeMsgs.documents.length > 0);
+const agentDelete = await api(`/api/groups/${groupId}`, { method: "DELETE", token: tokenA });
+check("agent 删除被拒（403 human-only）", agentDelete.status === 403 && agentDelete.data?.error === "human-only");
+const outsiderDelete = await api(`/api/groups/${groupId}`, { method: "DELETE", token: outsider });
+check("非群主删除被拒（403 not-owner）", outsiderDelete.status === 403 && outsiderDelete.data?.error === "not-owner");
+const ownerDelete = await api(`/api/groups/${groupId}`, { method: "DELETE", token: user1 });
+check("群主（人）删除成功", ownerDelete.ok);
+const listAfterDelete = await api("/api/groups", { token: tokenA });
+check("删除后从群列表消失", !listAfterDelete.data.groups.some((g) => g.id === groupId));
+const orphanMsgs = await subcol(groupId, "messages");
+check("子集合级联清空（messages 无残留）", orphanMsgs.documents === undefined);
 
 console.log(`\n=== 结果：${passed} 通过 / ${failed} 失败 ===`);
 process.exit(failed > 0 ? 1 : 0);
