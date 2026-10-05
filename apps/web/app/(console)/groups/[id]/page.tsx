@@ -9,10 +9,12 @@ import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { clientDb } from "@/lib/firebase";
+import { useGroups } from "@/lib/groups-context";
 import { messageAuthorName } from "@/lib/messages";
 import { hhmmss, relTime } from "@/lib/time";
 import type { Evidence, GoalPrompt, Group, Member, Message, Presence } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useAuthedFetch } from "@/lib/use-authed-fetch";
 import { useUser } from "@/lib/use-user";
 
 import { GoalsPanel } from "./goals";
@@ -56,19 +58,9 @@ function GroupView({ id }: { id: string }) {
   const listRef = useRef<HTMLElement | null>(null);
   const landedRef = useRef(false);
 
-  const authedFetch = useCallback(
-    async (path: string, init?: RequestInit) => {
-      const token = await idToken();
-      const res = await fetch(path, {
-        ...init,
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers },
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message ?? `${res.status}`);
-      return data;
-    },
-    [idToken],
-  );
+  const authedFetch = useAuthedFetch();
+  /** 归档状态一变，侧栏（GroupsProvider）要立刻跟着分组——不能等下一次跳转 */
+  const refreshGroups = useGroups().refresh;
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -163,14 +155,29 @@ function GroupView({ id }: { id: string }) {
     URL.revokeObjectURL(url);
   }
 
-  /** 收工归档：不可逆地把群推向终态（消息流冻结只读），因此是删除的**前置**。 */
+  /** 收工归档：把群推向终态（消息流冻结只读），因此是删除的**前置**。 */
   async function archiveGroup() {
     setArchiving(true);
     try {
       await authedFetch(`/api/groups/${id}/close`, { method: "POST" });
       setDetail(await authedFetch(`/api/groups/${id}`));
+      await refreshGroups();
     } catch (err) {
       setError(err instanceof Error ? err.message : "归档失败");
+    } finally {
+      setArchiving(false);
+    }
+  }
+
+  /** 取消归档：close 的逆操作，把群拉回进行中并解冻消息流（误归档的补救）。 */
+  async function reopenGroup() {
+    setArchiving(true);
+    try {
+      await authedFetch(`/api/groups/${id}/reopen`, { method: "POST" });
+      setDetail(await authedFetch(`/api/groups/${id}`));
+      await refreshGroups();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "取消归档失败");
     } finally {
       setArchiving(false);
     }
@@ -258,6 +265,12 @@ function GroupView({ id }: { id: string }) {
           {!archived && (
             <Button variant="ghost" size="sm" onClick={archiveGroup} disabled={archiving}>
               {archiving ? "归档中…" : "归档"}
+            </Button>
+          )}
+          {/* 归档可逆：误归档时，任何能归档的成员都能把群拉回来 */}
+          {archived && (
+            <Button variant="ghost" size="sm" onClick={reopenGroup} disabled={archiving}>
+              {archiving ? "处理中…" : "取消归档"}
             </Button>
           )}
           {archived &&

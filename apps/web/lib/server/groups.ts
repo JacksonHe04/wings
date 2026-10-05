@@ -239,6 +239,24 @@ export async function closeGroup(groupId: string, principal: Principal): Promise
 }
 
 /**
+ * 取消归档：close 的逆操作，把群从终态拉回进行中（消息流解冻）。
+ * 与 close 对称——能归档就能撤回；否则一旦误归档，共享的任务容器就没人能救回。
+ * 收尾时清掉 closedBy/closedAt，免得留一对「已收工」的痕迹误导后来人。
+ */
+export async function reopenGroup(groupId: string, principal: Principal): Promise<void> {
+  const groupRef = db.collection(GROUPS_COLLECTION).doc(groupId);
+  const snap = await groupRef.get();
+  if (!snap.exists) throw new HttpError(404, "not-found", "群不存在");
+  if (snap.get("status") !== "archived") return;
+  await groupRef.update({
+    status: "active",
+    closedBy: FieldValue.delete(),
+    closedAt: FieldValue.delete(),
+  });
+  await appendSystemMessage(groupId, `群已由 ${principal.kind}:${principal.id} 取消归档。消息流解冻。`);
+}
+
+/**
  * 能否删除：必须是人的凭据，且是建群者本人、或建群 agent 的主人。
  * 人删自己 agent 建的群要过一层 agents 查询——建群记录里存的是 agentId，不是人的 uid。
  */
