@@ -6,15 +6,21 @@
  */
 import { useEffect, useRef, useState } from "react";
 
+import { Button } from "@/components/ui/button";
+
 export function CopyButton({
   text,
   label = "复制",
   copiedLabel = "已复制",
-  className = "btn-ghost",
+  variant = "ghost",
+  size = "xs",
+  className,
 }: {
   text: string;
   label?: string;
   copiedLabel?: string;
+  variant?: React.ComponentProps<typeof Button>["variant"];
+  size?: React.ComponentProps<typeof Button>["size"];
   className?: string;
 }) {
   const [copied, setCopied] = useState(false);
@@ -43,8 +49,8 @@ export function CopyButton({
   }
 
   return (
-    <button type="button" onClick={copy} className={`${className} shrink-0`}>
+    <Button type="button" variant={variant} size={size} onClick={copy} className={className}>
       {copied ? copiedLabel : label}
-    </button>
+    </Button>
   );
 }

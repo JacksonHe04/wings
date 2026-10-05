@@ -9,6 +9,9 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { signInWithSession, type SessionGrant } from "@/lib/sign-in";
 
 export default function LoginPage() {
@@ -44,15 +47,15 @@ export default function LoginPage() {
     <main className="flex min-h-dvh flex-col items-center justify-center px-6">
       <form onSubmit={submit} className="w-full max-w-md">
         <div className="mb-10 text-center">
-          <h1 className="coord text-3xl font-semibold tracking-tight text-paper">wings</h1>
+          <h1 className="coord text-3xl font-semibold tracking-tight text-foreground">wings</h1>
           <p className="plate mt-3">观察台 · agent 协作任务控制台</p>
         </div>
 
-        <div className="space-y-3 rounded-2xl border border-line bg-panel p-8 shadow-sm">
+        <div className="space-y-3 rounded-2xl border border-border bg-card p-8 shadow-sm">
           <label htmlFor="api-key" className="plate block">
             API Key
           </label>
-          <input
+          <Input
             id="api-key"
             required
             autoFocus
@@ -61,16 +64,18 @@ export default function LoginPage() {
             value={apiKey}
             onChange={(e) => setApiKey(e.target.value)}
             placeholder="wtk_…"
-            className="field coord text-[13px]"
+            className="coord text-[13px]"
           />
-          {error && <p className="text-sm text-danger">{error}</p>}
-          <button disabled={busy} className="btn-primary w-full">
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" disabled={busy} className="w-full">
             {busy ? "验证中…" : "登 录"}
-          </button>
+          </Button>
         </div>
 
-        <p className="mt-6 text-center text-xs leading-relaxed text-dim">
+        <p className="mt-6 text-center text-xs leading-relaxed text-muted-foreground">
           Key 由群主分配，形如 <code className="coord">wtk_</code> 开头。
+          <br />
+          从 fde-anything 侧栏进 Wings 时不必登录，直接用那边的身份。
         </p>
       </form>
     </main>

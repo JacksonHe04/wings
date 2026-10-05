@@ -1,16 +1,23 @@
 "use client";
 
 /**
- * 控制台外壳：白侧栏（群导航）+ 主区。
- * 对齐 fde-anything Studio 的骨架——外壳不滚动，页面自管滚动区。
- * 侧栏群导航分「进行中 / 已归档」两段（与设计文档一致，归档群不能从导航里消失）；
+ * 控制台外壳：侧栏（群导航）+ 主区。
+ *
+ * 侧栏取值按 fde-anything Studio 的侧栏来——同样的 `--sidebar-*` 令牌、同样的
+ * `--app-header-height` 顶栏高度、同样的条目圆角与悬停底色：两个产品并排时不该看得出接缝。
+ * 外壳永远不滚动，各页面自管滚动区（`h-svh overflow-hidden`）；
  * 移动端侧栏隐藏，首页主区自带群列表（见 page.tsx 的 lg:hidden 区块）。
  */
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { LogOut } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { useRouteSync } from "@/lib/use-route-sync";
 import { useUser } from "@/lib/use-user";
-import { Spinner } from "./spinner";
+import { cn } from "@/lib/utils";
 
 export interface GroupSummary {
   id: string;
@@ -22,6 +29,8 @@ export interface GroupSummary {
 }
 
 export function ConsoleShell({ children }: { children: React.ReactNode }) {
+  // 内嵌时让父页面的地址栏跟上 iframe 里的位置（不嵌则什么也不做）
+  useRouteSync();
   const { user, loading, idToken } = useUser();
   const router = useRouter();
   const pathname = usePathname();
@@ -65,16 +74,19 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-svh overflow-hidden">
       {/* 侧栏：群导航 */}
-      <aside className="hidden w-(--sidebar-w) shrink-0 flex-col border-r border-line bg-panel lg:flex">
-        <div className="flex h-16 shrink-0 items-center border-b border-line px-4">
-          <Link href="/" className="coord text-lg font-semibold tracking-tight text-paper">wings</Link>
+      <aside className="hidden w-(--sidebar-w) shrink-0 flex-col border-r border-sidebar-border bg-sidebar lg:flex">
+        <div className="flex h-(--app-header-height) shrink-0 items-center border-b border-sidebar-border px-4">
+          <Link href="/" className="text-lg font-semibold tracking-tight">
+            wings
+          </Link>
         </div>
         <nav className="flex-1 overflow-y-auto p-2">
-          <p className="plate px-2 pb-1.5 pt-2">群 · 任务</p>
+          <p className="plate px-2 pt-2 pb-1.5">群 · 任务</p>
           <ul>
             {groupsLoading && (
-              <li className="px-2 py-3">
-                <Spinner label="加载中" />
+              <li className="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
+                <Spinner className="size-3.5" />
+                加载中
               </li>
             )}
             {!groupsLoading &&
@@ -82,12 +94,12 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
                 <GroupRow key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
               ))}
             {!groupsLoading && active.length === 0 && (
-              <li className="px-2 py-3 text-xs text-faint">还没有进行中的群</li>
+              <li className="px-2 py-3 text-xs text-text-tertiary">还没有进行中的群</li>
             )}
           </ul>
           {!groupsLoading && archived.length > 0 && (
             <>
-              <p className="plate px-2 pb-1.5 pt-4">已归档 · {archived.length}</p>
+              <p className="plate px-2 pt-4 pb-1.5">已归档 · {archived.length}</p>
               <ul>
                 {archived.map((g) => (
                   <GroupRow key={g.id} group={g} current={pathname === `/groups/${g.id}`} />
@@ -95,26 +107,22 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
               </ul>
             </>
           )}
-          <p className="plate px-2 pb-1.5 pt-4">凭证</p>
+          <p className="plate px-2 pt-4 pb-1.5">凭证</p>
           <ul>
             <li>
-              <Link
-                href="/api-keys"
-                className={`flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors ${
-                  pathname === "/api-keys" ? "bg-panel-2 font-medium text-paper" : "text-dim hover:bg-panel-2/60 hover:text-paper"
-                }`}
-              >
-                <span className="h-1.5 w-1.5 shrink-0 rounded-full border border-dim" />
+              <NavRow href="/api-keys" current={pathname === "/api-keys"} dot="outline">
                 API Key
-              </Link>
+              </NavRow>
             </li>
           </ul>
         </nav>
-        <div className="flex h-16 shrink-0 items-center gap-3 border-t border-line px-4">
-          <span className="min-w-0 flex-1 truncate text-xs text-dim">
+        <div className="flex h-(--app-header-height) shrink-0 items-center gap-2 border-t border-sidebar-border px-4">
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             {user.displayName ?? user.email ?? user.uid.slice(0, 8)}
           </span>
-          <button onClick={() => clientSignOut()} className="btn-ghost shrink-0">退出</button>
+          <Button variant="ghost" size="icon-sm" onClick={() => clientSignOut()} title="退出" aria-label="退出">
+            <LogOut />
+          </Button>
         </div>
       </aside>
 
@@ -124,25 +132,51 @@ export function ConsoleShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** 侧栏群行：进行中用信号绿点，归档弱化，当前页高亮。 */
+/** 侧栏条目：进行中用信号绿点，归档弱化成灰点，当前页高亮。 */
 function GroupRow({ group, current }: { group: GroupSummary; current: boolean }) {
   const archived = group.status === "archived";
   return (
     <li>
-      <Link
-        href={`/groups/${group.id}`}
-        className={`flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors ${
-          current
-            ? "bg-panel-2 font-medium text-paper"
-            : archived
-              ? "text-faint hover:bg-panel-2/60 hover:text-dim"
-              : "text-dim hover:bg-panel-2/60 hover:text-paper"
-        }`}
-      >
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${archived ? "bg-line" : "bg-signal"}`} />
-        <span className="truncate">{group.name}</span>
-      </Link>
+      <NavRow href={`/groups/${group.id}`} current={current} muted={archived} dot={archived ? "muted" : "online"}>
+        {group.name}
+      </NavRow>
     </li>
+  );
+}
+
+/** 侧栏一行的统一形态：圆点 + 文本，悬停/选中的底色与圆角取自 `--sidebar-accent`。 */
+function NavRow({
+  href,
+  current,
+  children,
+  dot,
+  muted,
+}: {
+  href: string;
+  current: boolean;
+  children: React.ReactNode;
+  dot: "online" | "outline" | "muted";
+  muted?: boolean;
+}) {
+  const dotClass =
+    dot === "online" ? "bg-presence-online" : dot === "outline" ? "border border-muted-foreground" : "bg-border";
+  return (
+    <Link
+      href={href}
+      aria-current={current ? "page" : undefined}
+      className={cn(
+        "flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors",
+        current
+          ? "bg-sidebar-accent font-medium text-sidebar-accent-foreground"
+          : cn(
+              "hover:bg-sidebar-accent/60",
+              muted ? "text-text-tertiary" : "text-muted-foreground hover:text-foreground",
+            ),
+      )}
+    >
+      <span className={cn("size-1.5 shrink-0 rounded-full", dotClass)} />
+      <span className="truncate">{children}</span>
+    </Link>
   );
 }
 
